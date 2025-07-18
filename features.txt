@@ -1,0 +1,242 @@
+System Overview
+
+  This is a sophisticated AI-powered procurement management platform that streamlines vendor management, bid processing, compliance monitoring, and strategic procurement decisions.
+
+  Getting Started
+
+  1. Registration & Authentication
+
+  Registration Process:
+  - Navigate to /register
+  - Fill in: email, password, confirm password, and select role
+  - Available Roles:
+    - USER: Basic access to view data
+    - ADMIN: Full system access and configuration
+    - PROCUREMENT_MANAGER: Manages procurement processes and vendor relationships
+    - EVALUATOR: Evaluates bids and vendor performance
+    - COMPLIANCE_OFFICER: Monitors regulatory compliance
+
+  Login:
+  - Use registered credentials at /login
+  - System provides JWT token for secure session management
+
+  2. Dashboard Navigation
+
+  The main dashboard (/dashboard) provides:
+  - Real-time Statistics: Active vendors, pending bids, compliance scores, total spending
+  - AI Analysis Hub: Access to 8 different AI analysis types
+  - Quick Actions: Direct access to all system modules
+  - Recent Activity: Track latest system updates
+
+  Core System Modules
+
+  3. Vendor Management (/vendors)
+
+  Adding Vendors:
+  - Click "Add New Vendor" button
+  - Fill required fields:
+    - Name, email, phone, website
+    - Business registration number
+    - Address details
+    - Business type and industry
+  - System automatically assigns "active" status
+
+  Vendor Features:
+  - Real-time Status Management: Active/Inactive toggle
+  - Performance Tracking: Star-based rating system
+  - Search & Filter: Find vendors by name, email, or business type
+  - Detailed Profiles: Complete vendor information display
+
+  Vendor Scoring System:
+  - AI-powered qualification assessment
+  - Multi-dimensional scoring (financial, technical, compliance, experience)
+  - Risk level evaluation (LOW, MEDIUM, HIGH, CRITICAL)
+  - Automated performance tracking
+
+  4. Product Catalog Management (/products)
+
+  Product Management:
+  - Create Products: Associate products with vendors
+  - Specifications: Detailed product specifications and compliance standards
+  - Inventory Tracking: Stock levels and availability
+  - Pricing Management: Unit prices, minimum/maximum order quantities
+  - Category Organization: Organize by product categories and subcategories
+
+  Product Features:
+  - Technical specifications with JSON storage
+  - Compliance standards tracking
+  - Lead time management
+  - Quality ratings and certifications
+
+  5. Bid Management System
+
+  Bid Lifecycle:
+  - DRAFT: Initial bid creation
+  - SUBMITTED: Vendor submission
+  - UNDER_EVALUATION: AI and human evaluation
+  - EVALUATED: Scoring completed
+  - AWARDED: Winning bid selected
+  - REJECTED: Unsuccessful bids
+  - WITHDRAWN: Vendor-cancelled bids
+
+  Bid Evaluation:
+  - AI-Powered Analysis: Automated scoring across multiple criteria
+  - Technical Scoring: Technical approach evaluation
+  - Cost Analysis: Price competitiveness assessment
+  - Timeline Evaluation: Delivery schedule feasibility
+  - Risk Assessment: Project risk evaluation
+
+  6. AI Intelligence Features
+
+  8 AI Analysis Types Available:
+
+  1. Vendor Optimization
+    - Vendor performance analysis
+    - Optimization recommendations
+    - Cost reduction opportunities
+  2. Cost Reduction Analysis
+    - Spending pattern analysis
+    - Cost-saving identification
+    - Budget optimization strategies
+  3. Risk Assessment
+    - Vendor risk evaluation
+    - Supply chain risk analysis
+    - Mitigation strategies
+  4. Compliance Review
+    - Regulatory compliance checking
+    - FAR, DFARS, and industry standards
+    - Compliance score calculation
+  5. Market Analysis
+    - Market trend analysis
+    - Competitive landscape assessment
+    - Opportunity identification
+  6. Bid Evaluation
+    - Automated bid comparison
+    - Win probability assessment
+    - Competitive positioning
+  7. Procurement Strategy
+    - Strategic procurement planning
+    - Vendor portfolio optimization
+    - Long-term strategy development
+  8. Document Analysis
+    - Vendor document processing
+    - Compliance document review
+    - Technical specification analysis
+
+  7. Compliance Management
+
+  Automated Compliance Checking:
+  - Regulatory Standards: FAR, DFARS, ISO standards
+  - Real-time Monitoring: Continuous compliance assessment
+  - Compliance Scoring: Quantitative compliance measurement
+  - Issue Tracking: Critical and non-critical issue identification
+  - Audit Trail: Complete compliance history
+
+  Compliance Results:
+  - COMPLIANT: Meets all requirements
+  - NON_COMPLIANT: Fails requirements
+  - PARTIALLY_COMPLIANT: Meets some requirements
+  - REQUIRES_REVIEW: Manual review needed
+
+  8. Advanced AI Services
+
+  Document Analysis:
+  - Vendor qualification document processing
+  - Bid document evaluation
+  - Compliance certificate verification
+  - Technical proposal analysis
+
+  Vendor Scoring:
+  - Multi-dimensional scoring algorithm
+  - Financial stability assessment
+  - Technical capability evaluation
+  - Risk level determination
+
+  Bid Optimization:
+  - Win probability calculation
+  - Competitive analysis
+  - Pricing strategy recommendations
+  - Proposal improvement suggestions
+
+  System Administration
+
+  9. User Role Management
+
+  Role Permissions:
+  - ADMIN: Full system access, user management, configuration
+  - PROCUREMENT_MANAGER: Vendor management, bid oversight, strategic planning
+  - EVALUATOR: Bid evaluation, vendor assessment, scoring
+  - COMPLIANCE_OFFICER: Compliance monitoring, regulatory review
+  - USER: Read-only access to approved data
+
+  10. Security Features
+
+  Authentication Security:
+  - JWT token-based authentication
+  - Role-based access control
+  - Secure password hashing (bcrypt)
+  - Session management
+
+  API Security:
+  - Rate limiting (100 requests per 15 minutes)
+  - CORS configuration
+  - Input validation and sanitization
+  - Helmet security headers
+
+  11. Real-time Features
+
+  Live Updates:
+  - Real-time dashboard statistics
+  - Instant vendor status changes
+  - Live bid status updates
+  - Immediate compliance alerts
+
+  Socket.io Integration:
+  - Real-time notifications
+  - Live system updates
+  - Collaborative features
+
+  Best Practices
+
+  12. Workflow Recommendations
+
+  Vendor Onboarding:
+  1. Register vendor with complete information
+  2. Upload qualification documents
+  3. Run AI document analysis
+  4. Perform compliance check
+  5. Assign qualification status
+  6. Set up product catalog
+
+  Bid Process:
+  1. Create bid opportunity
+  2. Invite qualified vendors
+  3. Collect bid submissions
+  4. Run AI bid evaluation
+  5. Perform human review
+  6. Award contract
+  7. Monitor performance
+
+  Compliance Monitoring:
+  1. Set up compliance requirements
+  2. Schedule regular reviews
+  3. Monitor compliance scores
+  4. Address non-compliance issues
+  5. Update compliance standards
+
+  13. Troubleshooting
+
+  Common Issues:
+  - Registration Errors: Ensure role matches backend valid roles
+  - Login Problems: Check credentials and account status
+  - AI Analysis Failures: Verify API configuration and limits
+  - Performance Issues: Check database connections and server resources
+
+  System Monitoring:
+  - Monitor API response times
+  - Track error logs
+  - Review compliance scores
+  - Analyze user activity patterns
+
+  This comprehensive system provides enterprise-grade procurement management with advanced AI capabilities, making it suitable for organizations requiring sophisticated vendor management, intelligent bid processing, and automated compliance monitoring.
+

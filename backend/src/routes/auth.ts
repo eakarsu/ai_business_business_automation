@@ -1,18 +1,10 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
-
-// Mock user data - replace with actual database operations
-const users = [
-  {
-    id: 1,
-    email: 'admin@procurement.com',
-    password: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-    role: 'admin'
-  }
-];
+const prisma = new PrismaClient();
 
 // Login route
 router.post('/login', async (req, res) => {
@@ -27,7 +19,9 @@ router.post('/login', async (req, res) => {
     }
 
     // Find user
-    const user = users.find(u => u.email === email);
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -79,7 +73,7 @@ router.post('/login', async (req, res) => {
 // Register route
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, role = 'user' } = req.body;
+    const { email, password, role = 'USER' } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -89,7 +83,9 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user exists
-    const existingUser = users.find(u => u.email === email);
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -100,15 +96,20 @@ router.post('/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
-    const newUser = {
-      id: users.length + 1,
-      email,
-      password: hashedPassword,
-      role
-    };
+    // Validate role
+    const validRoles = ['ADMIN', 'PROCUREMENT_MANAGER', 'EVALUATOR', 'COMPLIANCE_OFFICER', 'USER'];
+    const userRole = validRoles.includes(role.toUpperCase()) ? role.toUpperCase() : 'USER';
 
-    users.push(newUser);
+    // Create user
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        role: userRole,
+        firstName: 'User',
+        lastName: 'User'
+      }
+    });
 
     // Create token
     const jwtSecret = process.env.JWT_SECRET;

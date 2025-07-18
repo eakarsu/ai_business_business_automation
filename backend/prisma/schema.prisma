@@ -70,6 +70,7 @@ model Vendor {
   documents         VendorDocument[]
   evaluations       VendorEvaluation[]
   complianceChecks  ComplianceCheck[]
+  products          Product[]
   
   @@map("vendors")
 }
@@ -87,7 +88,7 @@ model VendorDocument {
   
   // AI Analysis
   extractedText String?
-  embedding     Float[]?
+  embedding     Float[]
   analysisResult Json?
   
   uploadedAt  DateTime @default(now())
@@ -140,7 +141,7 @@ model BidDocument {
   
   // AI Analysis
   extractedText String?
-  embedding     Float[]?
+  embedding     Float[]
   analysisResult Json?
   
   uploadedAt  DateTime @default(now())
@@ -261,6 +262,49 @@ model AuditLog {
   timestamp   DateTime @default(now())
   
   @@map("audit_logs")
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  
+  // Product Information
+  name            String
+  description     String?
+  category        String
+  subcategory     String?
+  sku             String?
+  manufacturer    String?
+  model           String?
+  
+  // Pricing
+  unitPrice       Float?
+  minOrderQty     Int?
+  maxOrderQty     Int?
+  currency        String   @default("USD")
+  
+  // Specifications
+  specifications  Json?
+  dimensions      Json?
+  weight          Float?
+  certifications  String[]
+  
+  // Availability
+  isActive        Boolean  @default(true)
+  inStock         Boolean  @default(true)
+  stockQuantity   Int?
+  leadTime        Int?     // in days
+  
+  // Compliance & Quality
+  complianceStandards String[]
+  qualityRatings      Json?
+  
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("products")
 }
 
 // Enums

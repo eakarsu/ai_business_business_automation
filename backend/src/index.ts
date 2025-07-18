@@ -15,6 +15,7 @@ import bidRoutes from './routes/bids';
 import complianceRoutes from './routes/compliance';
 import dashboardRoutes from './routes/dashboard';
 import aiRoutes from './routes/ai';
+import productRoutes from './routes/products';
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ app.use('/api/bids', authenticateToken, bidRoutes);
 app.use('/api/compliance', authenticateToken, complianceRoutes);
 app.use('/api/dashboard', authenticateToken, dashboardRoutes);
 app.use('/api/ai', authenticateToken, aiRoutes);
+app.use('/api/products', authenticateToken, productRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ 
