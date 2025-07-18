@@ -1,0 +1,480 @@
+
+⏺ AI Procurement Management System - User Manual
+
+  Table of Contents
+
+  1. #getting-started
+  2. #user-registration
+  3. #login-process
+  4. #dashboard-overview
+  5. #vendor-management
+  6. #product-management
+  7. #ai-features
+  8. #compliance-management
+  9. #troubleshooting
+
+  ---
+  Getting Started
+
+  System Requirements
+
+  - Modern web browser (Chrome, Firefox, Safari, Edge)
+  - Internet connection
+  - Valid email address for registration
+
+  Accessing the System
+
+  1. Open your web browser
+  2. Navigate to the application URL
+  3. You'll see the landing page with system overview
+
+  ---
+  User Registration
+
+  Step-by-Step Registration
+
+  1. Navigate to Registration
+    - Click "Get Started" or "Register" button
+    - Or go directly to /register
+  2. Fill Registration Form
+    - Email: Enter valid email address
+    - Password: Create secure password
+    - Confirm Password: Re-enter password
+    - Role: Select appropriate role:
+        - User: Basic viewing access
+      - Admin: Full system control
+      - Procurement Manager: Manage vendors and bids
+      - Evaluator: Evaluate bids and vendors
+      - Compliance Officer: Monitor compliance
+  3. Submit Registration
+    - Click "Create account"
+    - System will automatically log you in
+    - You'll be redirected to dashboard
+
+  Registration Troubleshooting
+
+  - Password Mismatch: Ensure both password fields match
+  - Email Already Exists: Use different email or try login
+  - Role Issues: Select from available dropdown options
+
+  ---
+  Login Process
+
+  How to Login
+
+  1. Access Login Page
+    - Click "Sign In" from homepage
+    - Or navigate to /login
+  2. Enter Credentials
+    - Email: Your registered email
+    - Password: Your account password
+  3. Login
+    - Click "Sign in"
+    - You'll be redirected to dashboard
+
+  Login Troubleshooting
+
+  - Wrong Password: Check credentials or reset password
+  - Account Not Found: Verify email or register new account
+  - System Error: Check internet connection and try again
+
+  ---
+  Dashboard Overview
+
+  Dashboard Layout
+
+  The dashboard is your central hub with four main sections:
+
+  1. Statistics Cards
+
+  - Active Vendors: Number of active vendors
+  - Pending Bids: Bids awaiting evaluation
+  - Compliance Score: Overall compliance percentage
+  - Total Spending: Current spending amount
+
+  2. AI Analysis Hub
+
+  - 8 AI Analysis Types available:
+    - Vendor Optimization
+    - Cost Reduction Analysis
+    - Risk Assessment
+    - Compliance Review
+    - Market Analysis
+    - Bid Evaluation
+    - Procurement Strategy
+    - Document Analysis
+
+  3. Quick Actions
+
+  - Manage Vendors: Direct access to vendor management
+  - View Bids: Access bid management system
+  - Compliance: Monitor compliance status
+  - Analytics: View system analytics
+
+  4. Recent Activities
+
+  - Latest system updates
+  - Recent vendor additions
+  - Compliance changes
+  - Bid status updates
+
+  Using AI Analysis
+
+  1. Select Analysis Type
+    - Click on any AI analysis card
+    - Modal window will open
+  2. Run Analysis
+    - Click "Run Analysis"
+    - System processes request
+    - Results display in modal
+  3. Review Results
+    - Read AI-generated insights
+    - Export or save recommendations
+    - Close modal when done
+
+  ---
+  Vendor Management
+
+  Accessing Vendor Management
+
+  - From dashboard: Click "Manage Vendors"
+  - Or navigate to /vendors
+
+  Adding New Vendors
+
+  1. Click "Add New Vendor"
+    - Form appears at top of page
+  2. Fill Required Information
+    - Name: Vendor company name
+    - Email: Contact email
+    - Phone: Contact phone number
+    - Website: Company website (optional)
+    - Registration Number: Business registration
+    - Business Type: Select from dropdown
+    - Industry: Vendor's industry sector
+  3. Address Information
+    - Street: Street address
+    - City: City name
+    - State: State/province
+    - Zip Code: Postal code
+    - Country: Country name
+  4. Submit
+    - Click "Add Vendor"
+    - Vendor appears in list immediately
+    - Status automatically set to "Active"
+
+  Managing Existing Vendors
+
+  Vendor List Features
+
+  - Search: Type vendor name to filter
+  - Status Toggle: Click status to change Active/Inactive
+  - Rating Display: Star ratings show vendor performance
+  - Contact Info: Email and phone displayed
+  - Business Details: Registration number and type shown
+
+  Vendor Actions
+
+  - Edit: Click vendor row to edit details
+  - Status Change: Toggle between Active/Inactive
+  - Delete: Remove vendor from system
+  - View Products: See vendor's product catalog
+
+  Vendor Status Management
+
+  - Active: Vendor can participate in bids
+  - Inactive: Vendor suspended from bidding
+  - Pending: New vendor awaiting approval
+  - Suspended: Temporarily suspended
+
+  ---
+  Product Management
+
+  Accessing Products
+
+  - From vendor page: Click "View Products"
+  - Or navigate to /products
+
+  Adding Products to Vendors
+
+  1. Select Vendor
+    - Choose vendor from dropdown
+    - Or filter by vendor ID
+  2. Product Information
+    - Name: Product name
+    - Description: Detailed description
+    - Category: Product category
+    - Subcategory: Specific subcategory
+    - SKU: Stock keeping unit
+    - Manufacturer: Product manufacturer
+    - Model: Product model number
+  3. Pricing Information
+    - Unit Price: Price per unit
+    - Minimum Order: Minimum quantity
+    - Maximum Order: Maximum quantity
+    - Currency: USD (default)
+  4. Specifications
+    - Technical Specs: JSON format specifications
+    - Dimensions: Product dimensions
+    - Weight: Product weight
+    - Certifications: Quality certifications
+  5. Availability
+    - Active Status: Product availability
+    - In Stock: Current stock status
+    - Stock Quantity: Available quantity
+    - Lead Time: Delivery time in days
+
+  Product Management Features
+
+  - Search Products: Find products by name or category
+  - Filter by Vendor: Show products from specific vendor
+  - Edit Products: Update product information
+  - Stock Management: Track inventory levels
+  - Compliance Tracking: Monitor compliance standards
+
+  ---
+  AI Features
+
+  Available AI Analysis Types
+
+  1. Vendor Optimization
+
+  - Purpose: Optimize vendor performance
+  - Use Case: Identify top-performing vendors
+  - Output: Performance rankings and recommendations
+
+  2. Cost Reduction Analysis
+
+  - Purpose: Find cost-saving opportunities
+  - Use Case: Reduce procurement spending
+  - Output: Cost reduction strategies and savings estimates
+
+  3. Risk Assessment
+
+  - Purpose: Evaluate procurement risks
+  - Use Case: Identify and mitigate risks
+  - Output: Risk analysis and mitigation strategies
+
+  4. Compliance Review
+
+  - Purpose: Check regulatory compliance
+  - Use Case: Ensure regulatory adherence
+  - Output: Compliance scores and violation alerts
+
+  5. Market Analysis
+
+  - Purpose: Analyze market trends
+  - Use Case: Strategic procurement planning
+  - Output: Market insights and opportunities
+
+  6. Bid Evaluation
+
+  - Purpose: Evaluate and compare bids
+  - Use Case: Select winning bids
+  - Output: Bid rankings and evaluation criteria
+
+  7. Procurement Strategy
+
+  - Purpose: Develop procurement strategies
+  - Use Case: Long-term procurement planning
+  - Output: Strategic recommendations and roadmaps
+
+  8. Document Analysis
+
+  - Purpose: Analyze procurement documents
+  - Use Case: Document review and validation
+  - Output: Document insights and compliance checks
+
+  How to Use AI Features
+
+  1. Access AI Analysis
+    - From dashboard: Click any AI analysis card
+    - Modal window opens
+  2. Select Analysis Type
+    - Choose from 8 available types
+    - Each type has specific use cases
+  3. Run Analysis
+    - Click "Run Analysis" button
+    - System processes your request
+    - Analysis takes 10-30 seconds
+  4. Review Results
+    - AI generates detailed insights
+    - Results include recommendations
+    - Save or export results as needed
+  5. Take Action
+    - Implement AI recommendations
+    - Monitor results and improvements
+    - Re-run analysis to track progress
+
+  ---
+  Compliance Management
+
+  Compliance Overview
+
+  The system automatically monitors compliance with:
+  - FAR (Federal Acquisition Regulation)
+  - DFARS (Defense Federal Acquisition Regulation)
+  - ISO Standards
+  - Industry-specific regulations
+
+  Compliance Features
+
+  1. Automated Compliance Checking
+
+  - Real-time compliance monitoring
+  - Automatic document scanning
+  - Regulatory requirement verification
+  - Compliance score calculation
+
+  2. Compliance Results
+
+  - COMPLIANT: Meets all requirements
+  - NON_COMPLIANT: Fails requirements
+  - PARTIALLY_COMPLIANT: Meets some requirements
+  - REQUIRES_REVIEW: Manual review needed
+
+  3. Compliance Monitoring
+
+  - Dashboard compliance score
+  - Vendor-specific compliance status
+  - Compliance trend tracking
+  - Alert system for violations
+
+  Using Compliance Features
+
+  1. View Compliance Dashboard
+    - Check overall compliance score
+    - Review compliance trends
+    - Monitor critical issues
+  2. Vendor Compliance Check
+    - Select vendor
+    - Run compliance analysis
+    - Review compliance report
+    - Address any issues
+  3. Document Compliance
+    - Upload vendor documents
+    - System automatically scans
+    - Compliance results generated
+    - Issues flagged for review
+
+  ---
+  Best Practices
+
+  1. User Management
+
+  - Assign appropriate roles to users
+  - Regularly review user permissions
+  - Update user information as needed
+  - Monitor user activity
+
+  2. Vendor Management
+
+  - Keep vendor information updated
+  - Regularly review vendor performance
+  - Monitor vendor compliance status
+  - Maintain vendor communication
+
+  3. Product Management
+
+  - Update product information regularly
+  - Monitor stock levels
+  - Track product performance
+  - Maintain accurate pricing
+
+  4. AI Usage
+
+  - Run regular AI analysis
+  - Review AI recommendations
+  - Implement suggested improvements
+  - Monitor results and trends
+
+  5. Compliance Management
+
+  - Regular compliance reviews
+  - Address issues promptly
+  - Keep compliance documentation updated
+  - Monitor regulatory changes
+
+  ---
+  Troubleshooting
+
+  Common Issues and Solutions
+
+  1. Registration Problems
+
+  - Issue: Role selection error
+  - Solution: Select from dropdown options (USER, ADMIN, PROCUREMENT_MANAGER, EVALUATOR, COMPLIANCE_OFFICER)
+
+  2. Login Issues
+
+  - Issue: Invalid credentials
+  - Solution: Verify email and password, check account status
+
+  3. AI Analysis Errors
+
+  - Issue: Analysis fails to run
+  - Solution: Check internet connection, try again, contact support
+
+  4. Vendor Management Issues
+
+  - Issue: Cannot add vendor
+  - Solution: Check required fields, verify data format
+
+  5. Performance Issues
+
+  - Issue: Slow loading
+  - Solution: Refresh page, check internet connection, clear browser cache
+
+  Getting Help
+
+  1. System Support
+
+  - Check user manual
+  - Review error messages
+  - Contact system administrator
+  - Submit support ticket
+
+  2. Training Resources
+
+  - User manual (this document)
+  - System tutorials
+  - Training videos
+  - Help documentation
+
+  3. Contact Information
+
+  - System administrator
+  - Technical support
+  - User community
+  - Documentation updates
+
+  ---
+  Quick Reference
+
+  Navigation Menu
+
+  - Dashboard: /dashboard - Main system hub
+  - Vendors: /vendors - Vendor management
+  - Products: /products - Product catalog
+  - Bids: /bids - Bid management
+  - Compliance: /compliance - Compliance monitoring
+  - Analytics: /analytics - System analytics
+
+  Keyboard Shortcuts
+
+  - Ctrl+/: Open help
+  - Ctrl+D: Dashboard
+  - Ctrl+V: Vendors
+  - Ctrl+P: Products
+  - Ctrl+B: Bids
+  - Ctrl+C: Compliance
+
+  System Status Indicators
+
+  - Green: Active/Compliant/Good
+  - Yellow: Pending/Warning
+  - Red: Inactive/Non-compliant/Error
+  - Gray: Disabled/Unknown
+
+  This manual provides comprehensive guidance for using the AI Procurement Management System effectively. For additional support or questions, contact your system administrator.
+
