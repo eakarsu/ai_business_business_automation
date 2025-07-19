@@ -1,63 +1,155 @@
 import express from 'express';
+import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
-// Mock dashboard data
-const getDashboardStats = () => {
-  return {
-    totalBids: 15,
-    activeBids: 8,
-    completedBids: 7,
-    totalVendors: 25,
-    activeVendors: 18,
-    pendingCompliance: 3,
-    totalSpend: 750000,
-    avgBidValue: 50000,
-    recentActivity: [
-      {
-        id: 1,
+// Get real dashboard data from database
+const getDashboardStats = async () => {
+  try {
+    // Get vendor counts
+    const totalVendors = await prisma.vendor.count();
+    const activeVendors = await prisma.vendor.count({
+      where: { isActive: true }
+    });
+
+    // Get bid counts
+    const totalBids = await prisma.bid.count();
+    const activeBids = await prisma.bid.count({
+      where: { status: 'SUBMITTED' }
+    });
+    const completedBids = await prisma.bid.count({
+      where: { status: 'EVALUATED' }
+    });
+
+    // Get compliance pending count
+    const pendingCompliance = await prisma.complianceCheck.count({
+      where: { checkResult: 'REQUIRES_REVIEW' }
+    });
+
+    // Calculate monthly spending from completed bids
+    const completedBidsWithAmount = await prisma.bid.findMany({
+      where: { 
+        status: 'EVALUATED',
+        proposedAmount: { not: null }
+      },
+      select: { proposedAmount: true }
+    });
+
+    const totalSpend = completedBidsWithAmount.reduce((sum, bid) => 
+      sum + (bid.proposedAmount || 0), 0
+    );
+
+    // Calculate average bid value
+    const avgBidValue = totalBids > 0 ? Math.round(totalSpend / totalBids) : 0;
+
+    // Get recent activity
+    const recentBids = await prisma.bid.findMany({
+      take: 2,
+      orderBy: { submittedAt: 'desc' },
+      include: { vendor: true }
+    });
+
+    const recentVendors = await prisma.vendor.findMany({
+      take: 1,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const recentActivity = [
+      ...recentBids.map(bid => ({
+        id: bid.id,
         type: 'bid_created',
-        message: 'New bid for Software Development Services',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString()
-      },
-      {
-        id: 2,
+        message: `New bid for ${bid.title}`,
+        timestamp: bid.submittedAt.toISOString()
+      })),
+      ...recentVendors.map(vendor => ({
+        id: vendor.id,
         type: 'vendor_registered',
-        message: 'New vendor Tech Solutions Inc. registered',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-      },
-      {
-        id: 3,
-        type: 'compliance_updated',
-        message: 'Compliance status updated for Global Supply Co.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString()
-      }
-    ]
-  };
+        message: `New vendor ${vendor.name} registered`,
+        timestamp: vendor.createdAt.toISOString()
+      }))
+    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 3);
+
+    // Calculate compliance score as percentage of compliant checks
+    const totalComplianceChecks = await prisma.complianceCheck.count();
+    const compliantChecks = await prisma.complianceCheck.count({
+      where: { checkResult: 'COMPLIANT' }
+    });
+    const complianceScore = totalComplianceChecks > 0 ? 
+      Math.round((compliantChecks / totalComplianceChecks) * 100) : 85;
+
+    return {
+      totalBids,
+      activeBids,
+      completedBids,
+      totalVendors,
+      activeVendors,
+      pendingCompliance,
+      totalSpend,
+      avgBidValue,
+      complianceScore,
+      recentActivity
+    };
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    // Return fallback data if database query fails
+    return {
+      totalBids: 0,
+      activeBids: 0,
+      completedBids: 0,
+      totalVendors: 0,
+      activeVendors: 0,
+      pendingCompliance: 0,
+      totalSpend: 0,
+      avgBidValue: 0,
+      complianceScore: 0,
+      recentActivity: []
+    };
+  }
 };
 
 // Get dashboard overview
-router.get('/', (req, res) => {
-  const stats = getDashboardStats();
-  
-  res.json({
-    success: true,
-    data: stats
-  });
+router.get('/', async (req, res) => {
+  try {
+    const stats = await getDashboardStats();
+    
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard overview:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch dashboard data'
+    });
+  }
 });
 
 // Get dashboard statistics (formatted for frontend)
-router.get('/stats', (req, res) => {
-  const stats = getDashboardStats();
-  
-  res.json({
-    totalVendors: stats.totalVendors,
-    activeBids: stats.activeBids,
-    pendingApprovals: stats.pendingCompliance,
-    completedProcurements: stats.completedBids,
-    monthlySpending: stats.totalSpend,
-    complianceScore: 85 // Mock compliance score as percentage
-  });
+router.get('/stats', async (req, res) => {
+  try {
+    const stats = await getDashboardStats();
+    
+    res.json({
+      totalVendors: stats.totalVendors,
+      activeBids: stats.activeBids,
+      pendingApprovals: stats.pendingCompliance,
+      completedProcurements: stats.completedBids,
+      monthlySpending: stats.totalSpend,
+      complianceScore: stats.complianceScore
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({
+      totalVendors: 0,
+      activeBids: 0,
+      pendingApprovals: 0,
+      completedProcurements: 0,
+      monthlySpending: 0,
+      complianceScore: 0
+    });
+  }
 });
 
 // Get bid statistics

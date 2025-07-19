@@ -124,6 +124,7 @@ model Bid {
   // Relations
   documents       BidDocument[]
   evaluations     BidEvaluation[]
+  counterOffers   CounterOffer[]
   
   @@map("bids")
 }
@@ -264,6 +265,34 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+model CounterOffer {
+  id              String   @id @default(cuid())
+  bidId           String
+  bid             Bid      @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  
+  // Counter Offer Details
+  proposedAmount  Float?
+  proposedTimeline Int? // in days
+  modifications   String // Description of changes
+  justification   String // Reasoning for the counter offer
+  
+  // Technical Changes
+  technicalChanges String?
+  alternativeApproach String?
+  
+  // Status and Metadata
+  status          CounterOfferStatus @default(PENDING)
+  createdAt       DateTime @default(now())
+  respondedAt     DateTime?
+  expiresAt       DateTime?
+  
+  // AI Analysis
+  aiRecommendation String?
+  riskAssessment   Json?
+  
+  @@map("counter_offers")
+}
+
 model Product {
   id              String   @id @default(cuid())
   vendorId        String
@@ -277,6 +306,8 @@ model Product {
   sku             String?
   manufacturer    String?
   model           String?
+  imageUrl        String?
+  images          String[]
   
   // Pricing
   unitPrice       Float?
@@ -350,6 +381,7 @@ enum BidStatus {
   AWARDED
   REJECTED
   WITHDRAWN
+  COUNTER_OFFERED
 }
 
 enum EvaluationStatus {
@@ -379,4 +411,12 @@ enum Priority {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum CounterOfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  UNDER_REVIEW
 }

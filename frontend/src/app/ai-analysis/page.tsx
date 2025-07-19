@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import AIAnalysisResults from '../../components/AIAnalysisResults';
 
 interface AIInsight {
   id: number;
@@ -32,6 +33,11 @@ export default function AIAnalysisPage() {
   const [user, setUser] = useState<any>(null);
   const [filter, setFilter] = useState('all');
   const [analysisRunning, setAnalysisRunning] = useState(false);
+  const [showAnalysisSelection, setShowAnalysisSelection] = useState(false);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [aiResults, setAiResults] = useState<any>(null);
+  const [currentAnalysisType, setCurrentAnalysisType] = useState<string>('');
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -45,7 +51,25 @@ export default function AIAnalysisPage() {
 
     setUser(JSON.parse(userData));
     fetchAIAnalysis(token);
+    fetchDashboardStats(token);
   }, [router]);
+
+  const fetchDashboardStats = async (token: string) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/dashboard/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardStats(data);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    }
+  };
 
   const fetchAIAnalysis = async (token: string) => {
     try {
@@ -80,9 +104,23 @@ export default function AIAnalysisPage() {
 
     setAnalysisRunning(true);
     try {
-      const response = await fetch('http://localhost:3001/api/ai/analyze', {
+      const response = await fetch('http://localhost:3001/api/ai/insights', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'vendor-analysis',
+          data: dashboardStats || { 
+            totalVendors: 0,
+            activeBids: 0,
+            pendingApprovals: 0,
+            completedProcurements: 0,
+            monthlySpending: 0,
+            complianceScore: 0 
+          }
+        })
       });
 
       if (response.ok) {
@@ -93,6 +131,49 @@ export default function AIAnalysisPage() {
     } finally {
       setAnalysisRunning(false);
     }
+  };
+
+  const handleSpecificAIAnalysis = () => {
+    setShowAnalysisSelection(true);
+  };
+
+  const runSpecificAIAnalysis = async (analysisType: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setAiAnalysisLoading(true);
+    setCurrentAnalysisType(analysisType);
+    try {
+      const response = await fetch('http://localhost:3001/api/ai/recommendations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          procurementData: {
+            stats: dashboardStats,
+            analysisType: analysisType,
+            timestamp: new Date().toISOString()
+          }
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAiResults(data.data);
+        setShowAnalysisSelection(false);
+      }
+    } catch (error) {
+      console.error('Error running AI analysis:', error);
+    } finally {
+      setAiAnalysisLoading(false);
+    }
+  };
+
+  const closeAnalysisSelection = () => {
+    setShowAnalysisSelection(false);
+    setAiResults(null);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -148,13 +229,19 @@ export default function AIAnalysisPage() {
               <button
                 onClick={runAIAnalysis}
                 disabled={analysisRunning}
-                className={`px-4 py-2 rounded-md text-white ${
+                className={`px-4 py-2 rounded-md text-white mr-2 ${
                   analysisRunning 
                     ? 'bg-gray-400 cursor-not-allowed' 
                     : 'bg-indigo-600 hover:bg-indigo-700'
                 }`}
               >
                 {analysisRunning ? 'Running Analysis...' : 'Run New Analysis'}
+              </button>
+              <button
+                onClick={handleSpecificAIAnalysis}
+                className="px-4 py-2 rounded-md text-white bg-purple-600 hover:bg-purple-700"
+              >
+                Specific Analysis
               </button>
             </div>
           </div>
@@ -189,6 +276,91 @@ export default function AIAnalysisPage() {
             <div className="text-sm text-gray-600">Prediction Accuracy</div>
           </div>
         </div>
+
+        {/* AI Analysis Selection */}
+        {showAnalysisSelection && (
+          <div className="bg-white shadow rounded-lg mb-8">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Select Analysis Type</h3>
+                <button
+                  onClick={closeAnalysisSelection}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-4">Select the type of AI analysis you want to run:</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => runSpecificAIAnalysis('vendor-optimization')}
+                  disabled={aiAnalysisLoading}
+                  className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                >
+                  <div className="text-left">
+                    <h4 className="font-medium text-gray-900">Vendor Optimization</h4>
+                    <p className="text-sm text-gray-600 mt-1">Analyze vendor performance and suggest improvements</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => runSpecificAIAnalysis('cost-reduction')}
+                  disabled={aiAnalysisLoading}
+                  className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                >
+                  <div className="text-left">
+                    <h4 className="font-medium text-gray-900">Cost Reduction</h4>
+                    <p className="text-sm text-gray-600 mt-1">Identify opportunities to reduce procurement costs</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => runSpecificAIAnalysis('risk-assessment')}
+                  disabled={aiAnalysisLoading}
+                  className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                >
+                  <div className="text-left">
+                    <h4 className="font-medium text-gray-900">Risk Assessment</h4>
+                    <p className="text-sm text-gray-600 mt-1">Evaluate procurement risks and mitigation strategies</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => runSpecificAIAnalysis('compliance-review')}
+                  disabled={aiAnalysisLoading}
+                  className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                >
+                  <div className="text-left">
+                    <h4 className="font-medium text-gray-900">Compliance Review</h4>
+                    <p className="text-sm text-gray-600 mt-1">Review compliance status and suggest improvements</p>
+                  </div>
+                </button>
+              </div>
+              
+              {aiAnalysisLoading && (
+                <div className="mt-4 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                  <span className="ml-2 text-sm text-gray-600">Running AI analysis...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* AI Analysis Results */}
+        {aiResults && (
+          <div className="bg-white shadow rounded-lg mb-8">
+            <div className="p-6">
+              <AIAnalysisResults 
+                results={aiResults}
+                analysisType={currentAnalysisType}
+                onRunAnother={handleSpecificAIAnalysis}
+              />
+            </div>
+          </div>
+        )}
 
         {/* AI Capabilities Overview */}
         <div className="bg-white shadow rounded-lg mb-8">
