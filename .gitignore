@@ -143,3 +143,4 @@ coverage/
 
 # Storybook
 storybook-static/
+.aider*

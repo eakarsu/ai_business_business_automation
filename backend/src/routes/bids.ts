@@ -73,12 +73,12 @@ router.get('/:id', async (req, res) => {
 // Create new bid
 router.post('/', async (req, res) => {
   try {
-    const { title, description, budget, vendorId } = req.body;
+    const { title, description, budget, vendorId, productId } = req.body;
 
-    if (!title || !description || !budget) {
+    if (!title || !budget) {
       return res.status(400).json({
         success: false,
-        message: 'Title, description, and budget are required'
+        message: 'Title and budget are required'
       });
     }
 
@@ -88,10 +88,12 @@ router.post('/', async (req, res) => {
         description,
         proposedAmount: parseFloat(budget),
         vendorId: vendorId || null,
+        ...(productId && { product: { connect: { id: productId } } }),
         status: 'SUBMITTED'
       },
       include: {
-        vendor: true
+        vendor: true,
+        product: true
       }
     });
 
@@ -134,7 +136,8 @@ router.put('/:id', async (req, res) => {
         vendorId: vendorId !== undefined ? vendorId : existingBid.vendorId
       },
       include: {
-        vendor: true
+        vendor: true,
+        product: true
       }
     });
 
