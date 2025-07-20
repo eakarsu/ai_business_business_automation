@@ -39,6 +39,12 @@ interface Bid {
 
 export default function BidsPage() {
   // ... existing state and effects ...
+  
+  // Add filteredBids calculation
+  const filteredBids = bids.filter(bid => {
+    if (filter === 'all') return true;
+    return bid.status.toLowerCase() === filter;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
