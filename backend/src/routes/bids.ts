@@ -37,3 +37,5 @@ router.get('/', async (req, res) => {
 });
 
 // ... rest of the routes remain unchanged ...
+
+export const bidRoutes = router; // Change to named export
