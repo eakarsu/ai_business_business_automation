@@ -228,7 +228,7 @@ install_dependencies() {
 run_migrations() {
     log "Running database migrations..."
     cd backend
-    if npm run prisma:migrate &> /dev/null; then
+    if npm run migrate &> /dev/null; then
         success "Database migrations completed"
     else
         warning "Database migrations failed or not configured"
