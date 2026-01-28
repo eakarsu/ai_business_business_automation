@@ -267,7 +267,8 @@ export default function ProductsPage() {
           description: newBid.description,
           budget: parseFloat(newBid.amount),
           deadline: newBid.deadline,
-          vendorId: selectedProduct?.vendor.id
+          vendorId: selectedProduct?.vendor.id,
+          productId: selectedProduct?.id
         }),
       });
 

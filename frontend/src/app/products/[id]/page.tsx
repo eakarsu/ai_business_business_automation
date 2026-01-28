@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 interface Product {
@@ -52,6 +52,7 @@ export default function ProductDetailsPage() {
   });
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -109,6 +110,19 @@ export default function ProductDetailsPage() {
     
     if (!token) return;
 
+    const bidData = {
+      title: newBid.title,
+      description: newBid.description,
+      budget: parseFloat(newBid.amount) * quantity,
+      deadline: newBid.deadline,
+      vendorId: product?.vendor.id,
+      productId: product?.id
+    };
+
+    console.log('Creating bid with data:', bidData);
+    console.log('Product object:', product);
+    console.log('Product ID specifically:', product?.id);
+
     try {
       const response = await fetch('http://localhost:3001/api/bids', {
         method: 'POST',
@@ -116,13 +130,7 @@ export default function ProductDetailsPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          title: newBid.title,
-          description: newBid.description,
-          budget: parseFloat(newBid.amount) * quantity,
-          deadline: newBid.deadline,
-          vendorId: product?.vendor.id
-        }),
+        body: JSON.stringify(bidData),
       });
 
       if (response.ok) {
@@ -169,8 +177,11 @@ export default function ProductDetailsPage() {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center py-4">
-            <Link href="/products" className="text-blue-600 hover:text-blue-800 mr-4">
-              ← Back to Products
+            <Link 
+              href={searchParams.get('from') === 'bids' ? '/bids' : '/products'} 
+              className="text-blue-600 hover:text-blue-800 mr-4"
+            >
+              ← Back to {searchParams.get('from') === 'bids' ? 'Bids' : 'Products'}
             </Link>
             <div className="text-sm text-gray-500">
               Products &gt; {product.category} &gt; {product.name}
