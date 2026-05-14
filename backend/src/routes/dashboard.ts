@@ -1,8 +1,11 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Auth applied at router level (also applied at mount point in index.ts for belt-and-suspenders)
+router.use(authenticateToken);
 
 // Get real dashboard data from database
 const getDashboardStats = async () => {
@@ -152,116 +155,141 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// Get bid statistics
-router.get('/bids', (req, res) => {
-  const bidStats = {
-    total: 15,
-    active: 8,
-    completed: 7,
-    draft: 2,
-    cancelled: 1,
-    byStatus: {
-      open: 5,
-      in_progress: 3,
-      completed: 7
-    },
-    byMonth: [
-      { month: 'Jan', count: 2 },
-      { month: 'Feb', count: 3 },
-      { month: 'Mar', count: 4 },
-      { month: 'Apr', count: 3 },
-      { month: 'May', count: 3 }
-    ]
-  };
+// Get bid statistics — real DB data
+router.get('/bids', async (req, res) => {
+  try {
+    const [total, active, completed, draft, awarded, rejected] = await Promise.all([
+      prisma.bid.count(),
+      prisma.bid.count({ where: { status: 'SUBMITTED' } }),
+      prisma.bid.count({ where: { status: 'EVALUATED' } }),
+      prisma.bid.count({ where: { status: 'DRAFT' } }),
+      prisma.bid.count({ where: { status: 'AWARDED' } }),
+      prisma.bid.count({ where: { status: 'REJECTED' } }),
+    ]);
 
-  res.json({
-    success: true,
-    data: bidStats
-  });
+    // Monthly bids for last 6 months
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const recentBids = await prisma.bid.findMany({
+      where: { submittedAt: { gte: sixMonthsAgo } },
+      select: { submittedAt: true },
+      orderBy: { submittedAt: 'asc' },
+    });
+    const byMonth: Record<string, number> = {};
+    recentBids.forEach(b => {
+      const key = b.submittedAt.toISOString().slice(0, 7);
+      byMonth[key] = (byMonth[key] || 0) + 1;
+    });
+
+    res.json({ success: true, data: { total, active, completed, draft, awarded, rejected,
+      byStatus: { submitted: active, evaluated: completed, draft, awarded, rejected },
+      byMonth: Object.entries(byMonth).map(([month, count]) => ({ month, count })),
+    }});
+  } catch (e) {
+    console.error('Dashboard bids error:', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch bid stats' });
+  }
 });
 
-// Get vendor statistics
-router.get('/vendors', (req, res) => {
-  const vendorStats = {
-    total: 25,
-    active: 18,
-    inactive: 7,
-    byCompliance: {
-      compliant: 15,
-      pending: 3,
-      non_compliant: 7
-    },
-    topVendors: [
-      { name: 'Tech Solutions Inc.', bidsWon: 5, totalValue: 250000 },
-      { name: 'Global Supply Co.', bidsWon: 3, totalValue: 150000 },
-      { name: 'Innovation Corp.', bidsWon: 2, totalValue: 100000 }
-    ]
-  };
+// Get vendor statistics — real DB data
+router.get('/vendors', async (req, res) => {
+  try {
+    const [total, active, inactive, qualified, pending, disqualified] = await Promise.all([
+      prisma.vendor.count(),
+      prisma.vendor.count({ where: { isActive: true } }),
+      prisma.vendor.count({ where: { isActive: false } }),
+      prisma.vendor.count({ where: { qualificationStatus: 'QUALIFIED' } }),
+      prisma.vendor.count({ where: { qualificationStatus: 'PENDING' } }),
+      prisma.vendor.count({ where: { qualificationStatus: 'DISQUALIFIED' } }),
+    ]);
 
-  res.json({
-    success: true,
-    data: vendorStats
-  });
+    const topVendors = await prisma.vendor.findMany({
+      where: { overallScore: { not: null } },
+      orderBy: { overallScore: 'desc' },
+      take: 5,
+      select: { name: true, overallScore: true, riskLevel: true, qualificationStatus: true },
+    });
+
+    res.json({ success: true, data: { total, active, inactive,
+      byQualification: { qualified, pending, disqualified },
+      topVendors,
+    }});
+  } catch (e) {
+    console.error('Dashboard vendors error:', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch vendor stats' });
+  }
 });
 
-// Get compliance statistics
-router.get('/compliance', (req, res) => {
-  const complianceStats = {
-    totalRecords: 20,
-    compliant: 12,
-    pending: 5,
-    non_compliant: 3,
-    byRequirement: {
-      'Tax Compliance': { compliant: 18, pending: 2 },
-      'Insurance Coverage': { compliant: 15, pending: 5 },
-      'Quality Certification': { compliant: 12, pending: 8 }
-    },
-    recentUpdates: [
-      {
-        vendorName: 'Tech Solutions Inc.',
-        status: 'compliant',
-        updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-      },
-      {
-        vendorName: 'Global Supply Co.',
-        status: 'pending',
-        updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString()
-      }
-    ]
-  };
+// Get compliance statistics — real DB data
+router.get('/compliance', async (req, res) => {
+  try {
+    const records = await prisma.complianceCheck.findMany({
+      select: { checkResult: true, complianceScore: true, regulationType: true, checkedAt: true, vendor: { select: { name: true } } },
+      orderBy: { checkedAt: 'desc' },
+    });
 
-  res.json({
-    success: true,
-    data: complianceStats
-  });
+    const total = records.length;
+    const compliant = records.filter(r => r.checkResult === 'COMPLIANT').length;
+    const nonCompliant = records.filter(r => r.checkResult === 'NON_COMPLIANT').length;
+    const pending = records.filter(r => r.checkResult === 'REQUIRES_REVIEW').length;
+    const partial = records.filter(r => r.checkResult === 'PARTIALLY_COMPLIANT').length;
+    const avgScore = total > 0 ? records.reduce((s, r) => s + r.complianceScore, 0) / total : 0;
+
+    const byType: Record<string, { compliant: number; total: number }> = {};
+    records.forEach(r => {
+      if (!byType[r.regulationType]) byType[r.regulationType] = { compliant: 0, total: 0 };
+      byType[r.regulationType]!.total++;
+      if (r.checkResult === 'COMPLIANT') byType[r.regulationType]!.compliant++;
+    });
+
+    res.json({ success: true, data: { total, compliant, nonCompliant, pending, partial, avgScore: Math.round(avgScore),
+      byType,
+      recentUpdates: records.slice(0, 5).map(r => ({ vendorName: r.vendor?.name || 'System', status: r.checkResult, checkedAt: r.checkedAt })),
+    }});
+  } catch (e) {
+    console.error('Dashboard compliance error:', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch compliance stats' });
+  }
 });
 
-// Get financial overview
-router.get('/financial', (req, res) => {
-  const financialStats = {
-    totalSpend: 750000,
-    budgetUtilization: 75,
-    avgBidValue: 50000,
-    savingsAchieved: 125000,
-    spendByCategory: [
-      { category: 'Software Development', amount: 300000 },
-      { category: 'Infrastructure', amount: 200000 },
-      { category: 'Consulting', amount: 150000 },
-      { category: 'Maintenance', amount: 100000 }
-    ],
-    monthlySpend: [
-      { month: 'Jan', amount: 120000 },
-      { month: 'Feb', amount: 150000 },
-      { month: 'Mar', amount: 180000 },
-      { month: 'Apr', amount: 140000 },
-      { month: 'May', amount: 160000 }
-    ]
-  };
+// Get financial overview — real DB data
+router.get('/financial', async (req, res) => {
+  try {
+    const spendAgg = await prisma.spendRecord.aggregate({ _sum: { amount: true }, _count: true });
+    const totalSpend = spendAgg._sum.amount || 0;
 
-  res.json({
-    success: true,
-    data: financialStats
-  });
+    const savingsAgg = await prisma.savingsOpportunity.aggregate({
+      _sum: { realizedSavings: true, projectedSavings: true }
+    });
+
+    const spendByCategory = await prisma.spendRecord.groupBy({
+      by: ['category'], _sum: { amount: true }, orderBy: { _sum: { amount: 'desc' } }, take: 8,
+    });
+
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const monthlyRecords = await prisma.spendRecord.findMany({
+      where: { transactionDate: { gte: sixMonthsAgo } },
+      select: { amount: true, transactionDate: true },
+    });
+    const byMonth: Record<string, number> = {};
+    monthlyRecords.forEach(r => {
+      const key = r.transactionDate.toISOString().slice(0, 7);
+      byMonth[key] = (byMonth[key] || 0) + r.amount;
+    });
+
+    res.json({ success: true, data: {
+      totalSpend,
+      transactionCount: spendAgg._count,
+      savingsAchieved: savingsAgg._sum.realizedSavings || 0,
+      projectedSavings: savingsAgg._sum.projectedSavings || 0,
+      spendByCategory: spendByCategory.map(s => ({ category: s.category, amount: s._sum.amount || 0 })),
+      monthlySpend: Object.entries(byMonth).map(([month, amount]) => ({ month, amount })),
+    }});
+  } catch (e) {
+    console.error('Dashboard financial error:', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch financial stats' });
+  }
 });
 
 export default router;

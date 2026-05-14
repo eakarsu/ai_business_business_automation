@@ -4,6 +4,101 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AIAnalysisResults from '../../components/AIAnalysisResults';
+import { API_URL } from '@/lib/api';
+
+// Component to display persisted AI results history
+function AIResultsHistory() {
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    fetchResults();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  const fetchResults = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/ai/results?page=${page}&limit=10`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setResults(data.data || []);
+        setTotal(data.pagination?.total || 0);
+        setTotalPages(data.pagination?.totalPages || 1);
+      }
+    } catch (e) {
+      console.error('Error fetching AI results:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatType = (t: string) => t.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 mb-8">
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">AI Analysis History</h2>
+            <p className="text-sm text-gray-500">{total} persisted results</p>
+          </div>
+        </div>
+        {loading ? (
+          <div className="p-6 text-center text-gray-500">Loading history...</div>
+        ) : results.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">No AI analysis results yet. Run an analysis above.</div>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {results.map((r: any) => (
+              <li key={r.id} className="px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 mr-2">
+                      {formatType(r.analysisType)}
+                    </span>
+                    {r.entityType && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 mr-2">
+                        {r.entityType} {r.entityId ? `#${r.entityId.slice(0, 8)}` : ''}
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400">{r.model}</span>
+                  </div>
+                  <span className="text-xs text-gray-500">{new Date(r.createdAt).toLocaleString()}</span>
+                </div>
+                {r.result && !r.result.parseError && (
+                  <div className="mt-2 text-sm text-gray-600 bg-gray-50 rounded p-2 font-mono overflow-x-auto max-h-28 overflow-y-hidden">
+                    {r.result.summary || r.result.executiveSummary || r.result.marketOverview || JSON.stringify(r.result).slice(0, 200) + '...'}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {totalPages > 1 && (
+          <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+            <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
+            <div className="flex gap-2">
+              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+                className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">
+                Prev
+              </button>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+                className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50">
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface AIInsight {
   id: number;
@@ -56,7 +151,7 @@ export default function AIAnalysisPage() {
 
   const fetchDashboardStats = async (token: string) => {
     try {
-      const response = await fetch('http://localhost:3001/api/dashboard/stats', {
+      const response = await fetch(`${API_URL}/api/dashboard/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -74,10 +169,10 @@ export default function AIAnalysisPage() {
   const fetchAIAnalysis = async (token: string) => {
     try {
       const [insightsResponse, statsResponse] = await Promise.all([
-        fetch('http://localhost:3001/api/ai/insights', {
+        fetch(`${API_URL}/api/ai/insights`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:3001/api/ai/stats', {
+        fetch(`${API_URL}/api/ai/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -104,9 +199,9 @@ export default function AIAnalysisPage() {
 
     setAnalysisRunning(true);
     try {
-      const response = await fetch('http://localhost:3001/api/ai/insights', {
+      const response = await fetch(`${API_URL}/api/ai/insights`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -144,7 +239,7 @@ export default function AIAnalysisPage() {
     setAiAnalysisLoading(true);
     setCurrentAnalysisType(analysisType);
     try {
-      const response = await fetch('http://localhost:3001/api/ai/recommendations', {
+      const response = await fetch(`${API_URL}/api/ai/recommendations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -484,6 +579,9 @@ export default function AIAnalysisPage() {
             )}
           </ul>
         </div>
+
+        {/* Persisted AI Results History */}
+        <AIResultsHistory />
       </main>
     </div>
   );

@@ -1,0 +1,81 @@
+I've analyzed your system and found the complete workflow for viewing vendor products and creating bids. Here's your step-by-step guide:
+
+  How to View Vendor Products and Create Bids
+
+  1. Login to the System
+
+  - Go to http://localhost:3000/login (or your frontend URL)
+  - Use your registered credentials
+
+  2. Navigate to Products
+
+  From the dashboard, you have two ways to access products:
+  - Option A: Click "Products" in the navigation menu
+  - Option B: Use the direct URL http://localhost:3000/products
+
+  3. Browse Vendor Products
+
+  The products page (/products) shows:
+  - Product catalog with vendor products in a grid layout
+  - Filter options by:
+    - Category (Technology, Office Supplies, Construction, etc.)
+    - Vendor (dropdown showing all vendors)
+  - Product details for each item:
+    - Product name and description
+    - Vendor name
+    - Category
+    - SKU (if available)
+    - Unit price
+    - Stock quantity
+    - Lead time
+    - Active/Inactive status
+    - In Stock/Out of Stock status
+
+  4. View Bids Page
+
+  To access the bidding system:
+  - Go to http://localhost:3000/bids
+  - Or click "View Bids" from the dashboard
+
+  5. Create a New Bid
+
+  On the bids page:
+  1. Click the "Add Bid" button
+  2. Fill out the bid form:
+    - Bid Title: Name your bid
+    - Vendor Name: Enter vendor name
+    - Amount: Enter bid amount in USD
+    - Category: Select from dropdown (IT Services, Office Supplies, Manufacturing, Consulting, Other)
+    - Description: Detailed description of the bid
+  3. Click "Add Bid" to submit
+
+  6. Track Your Bids
+
+  The bids page shows:
+  - All bids with filtering by status:
+    - Submitted
+    - Under Review
+    - Approved
+    - Rejected
+  - Bid details including:
+    - Title, vendor, amount, category
+    - Description and submission date
+    - Current status
+  - Status management dropdown to update bid status
+
+  7. Navigation Flow
+
+  Your typical workflow:
+  1. Dashboard → Quick overview of stats
+  2. Products → Browse available vendor products
+  3. Bids → Create bids for products you want to procure
+  4. Dashboard → Monitor bid status and procurement metrics
+
+  Key Features Available:
+
+  - Product filtering by category and vendor
+  - Real-time bid status tracking
+  - Comprehensive product information including pricing and availability
+  - Bid management with status updates
+
+  The system is fully functional for viewing vendor products and managing the complete bidding workflow!

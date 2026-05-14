@@ -1,7 +1,47 @@
 import { HfInference } from '@huggingface/inference';
 import OpenAI from 'openai';
+import { prisma } from '../lib/prisma';
 
 const hf = process.env.HUGGINGFACE_API_KEY ? new HfInference(process.env.HUGGINGFACE_API_KEY) : null;
+
+// Canonical parseAIJson helper used everywhere
+export function parseAIJson(text: string | null | undefined): any {
+  if (!text) return null;
+  try { return JSON.parse(text); } catch(e) {}
+  const stripped = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+  try { return JSON.parse(stripped); } catch(e) {}
+  const start = text.indexOf('{'); const end = text.lastIndexOf('}');
+  if (start !== -1 && end !== -1) { try { return JSON.parse(text.slice(start, end + 1)); } catch(e) {} }
+  return null;
+}
+
+// Persist an AI result to the ai_results table
+export async function persistAIResult(params: {
+  analysisType: string;
+  entityType?: string;
+  entityId?: string;
+  userId?: string;
+  inputData: any;
+  result: any;
+  model: string;
+}): Promise<void> {
+  try {
+    await (prisma as any).aIResult.create({
+      data: {
+        analysisType: params.analysisType,
+        entityType: params.entityType || null,
+        entityId: params.entityId || null,
+        userId: params.userId || null,
+        inputData: params.inputData,
+        result: params.result,
+        model: params.model,
+      },
+    });
+  } catch (err) {
+    // Non-critical: log but don't throw
+    console.error('Failed to persist AI result:', err);
+  }
+}
 
 export class AIService {
   private static openai: OpenAI | null = null;
@@ -22,9 +62,11 @@ export class AIService {
   private static async makeOpenRouterRequest(prompt: string, systemMessage: string, maxTokens: number = 2000, temperature: number = 0.3): Promise<any> {
     try {
       const openai = this.getOpenAIClient();
-      
+      // Default to claude-3-5-sonnet for richer analysis; allow env override
+      const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022';
+
       const response = await openai.chat.completions.create({
-        model: 'anthropic/claude-3.5-sonnet',
+        model: model,
         messages: [
           {
             role: 'system',
@@ -45,6 +87,11 @@ export class AIService {
       throw new Error('Failed to process AI request');
     }
   }
+
+  private static parseJSON(text: string | null | undefined): any {
+    return parseAIJson(text) || { raw: text, parseError: true };
+  }
+
   static async generateEmbedding(text: string): Promise<number[]> {
     try {
       if (!hf) {
@@ -70,57 +117,88 @@ export class AIService {
   ): Promise<any> {
     try {
       let prompt = '';
-      
+
       switch (analysisType) {
         case 'vendor-qualification':
-          prompt = `Analyze this vendor document for qualification assessment. Focus on:
-          1. Financial stability indicators
-          2. Technical capabilities
-          3. Compliance history
-          4. Experience and references
-          5. Risk factors
-          
-          Document: ${text}
-          
-          Provide a structured analysis with scores (1-10) for each category and overall recommendation.`;
+          prompt = `Analyze this document for qualification assessment:
+
+Document: ${text}
+
+Provide your analysis as ONLY valid JSON (no markdown) with this structure:
+{
+  "overallScore": <number 0-100>,
+  "summary": "<2-3 sentence executive summary>",
+  "categories": [
+    { "name": "Financial Stability", "score": <0-100> },
+    { "name": "Technical Capability", "score": <0-100> },
+    { "name": "Compliance History", "score": <0-100> },
+    { "name": "Experience", "score": <0-100> }
+  ],
+  "keyFindings": ["<finding 1>", "<finding 2>", "<finding 3>"],
+  "recommendations": [
+    { "title": "<short title>", "description": "<detail>", "priority": "<high|medium|low>" }
+  ],
+  "savingsOpportunities": [
+    { "area": "<area>", "potentialSavings": <number> }
+  ]
+}`;
           break;
-          
+
         case 'bid-evaluation':
-          prompt = `Evaluate this bid proposal for procurement decision. Analyze:
-          1. Technical merit and feasibility
-          2. Cost-effectiveness
-          3. Timeline and delivery capabilities
-          4. Risk assessment
-          5. Compliance with requirements
-          
-          Proposal: ${text}
-          
-          Provide detailed scoring and recommendations.`;
+          prompt = `Evaluate this for procurement decision:
+
+Document: ${text}
+
+Provide your analysis as ONLY valid JSON (no markdown) with this structure:
+{
+  "overallScore": <number 0-100>,
+  "summary": "<2-3 sentence executive summary>",
+  "categories": [
+    { "name": "Technical Merit", "score": <0-100> },
+    { "name": "Cost Effectiveness", "score": <0-100> },
+    { "name": "Delivery Capability", "score": <0-100> },
+    { "name": "Risk Level", "score": <0-100> }
+  ],
+  "keyFindings": ["<finding 1>", "<finding 2>", "<finding 3>"],
+  "recommendations": [
+    { "title": "<short title>", "description": "<detail>", "priority": "<high|medium|low>" }
+  ],
+  "savingsOpportunities": [
+    { "area": "<area>", "potentialSavings": <number> }
+  ]
+}`;
           break;
-          
+
         case 'compliance-check':
-          prompt = `Check this document for regulatory compliance. Examine:
-          1. FAR (Federal Acquisition Regulation) compliance
-          2. DFARS compliance (if applicable)
-          3. Industry-specific regulations
-          4. Environmental and sustainability requirements
-          5. Data protection and security standards
-          
-          Document: ${text}
-          
-          Identify compliance gaps and provide remediation recommendations.`;
+          prompt = `Check this document for regulatory compliance:
+
+Document: ${text}
+
+Provide your analysis as ONLY valid JSON (no markdown) with this structure:
+{
+  "overallScore": <number 0-100>,
+  "summary": "<2-3 sentence compliance summary>",
+  "categories": [
+    { "name": "Regulatory Compliance", "score": <0-100> },
+    { "name": "Documentation Standards", "score": <0-100> },
+    { "name": "Data Protection", "score": <0-100> },
+    { "name": "Environmental Standards", "score": <0-100> }
+  ],
+  "keyFindings": ["<finding 1>", "<finding 2>", "<finding 3>"],
+  "recommendations": [
+    { "title": "<short title>", "description": "<detail>", "priority": "<high|medium|low>" }
+  ],
+  "savingsOpportunities": []
+}`;
           break;
       }
 
-      const systemMessage = 'You are an expert procurement analyst with deep knowledge of government and commercial procurement processes, compliance requirements, and risk assessment.';
-      
-      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.3);
+      const systemMessage = 'You are an expert procurement analyst. Always respond with valid JSON only, no markdown formatting, no explanatory text.';
 
-      return {
-        analysis: response,
-        model: 'anthropic/claude-3.5-sonnet',
-        timestamp: new Date().toISOString()
-      };
+      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.3);
+      const parsed = this.parseJSON(response);
+
+      return parsed;
     } catch (error) {
       console.error('Error analyzing document:', error);
       throw new Error('Failed to analyze document');
@@ -130,32 +208,67 @@ export class AIService {
   static async generateVendorScore(vendorData: any): Promise<{
     overallScore: number;
     categoryScores: Record<string, number>;
-    riskLevel: 'low' | 'medium' | 'high';
-    recommendations: string[];
+    riskLevel: string;
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    keyFindings: string[];
+    recommendations: { title: string; description: string; priority: string; category: string }[];
   }> {
     try {
-      const prompt = `Based on this vendor information, calculate a comprehensive vendor qualification score:
-      
-      Vendor Data: ${JSON.stringify(vendorData)}
-      
-      Please provide:
-      1. Overall score (0-100)
-      2. Category scores for: financial_stability, technical_capability, compliance_history, experience, references
-      3. Risk level assessment
-      4. Specific recommendations for improvement or concerns
-      
-      Return as JSON format.`;
+      const prompt = `Perform a comprehensive vendor qualification analysis based on this vendor data:
 
-      const systemMessage = 'You are a vendor qualification expert. Always respond with valid JSON containing the requested scoring structure.';
-      
-      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 1000, 0.1);
-      const result = JSON.parse(response || '{}');
-      
+Vendor Data: ${JSON.stringify(vendorData)}
+
+Provide a thorough analysis with the following structure (return ONLY valid JSON, no markdown):
+{
+  "overallScore": <number 0-100>,
+  "categoryScores": {
+    "financial_stability": <number 0-100>,
+    "technical_capability": <number 0-100>,
+    "compliance_history": <number 0-100>,
+    "experience": <number 0-100>,
+    "references": <number 0-100>
+  },
+  "riskLevel": "<LOW|MEDIUM|HIGH>",
+  "summary": "<2-3 sentence executive summary of the vendor assessment>",
+  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "weaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"],
+  "keyFindings": ["<finding 1>", "<finding 2>", "<finding 3>", "<finding 4>"],
+  "recommendations": [
+    {
+      "title": "<short action title>",
+      "description": "<detailed explanation of what to do and why>",
+      "priority": "<high|medium|low>",
+      "category": "<Financial|Technical|Compliance|Risk|Strategic>"
+    }
+  ]
+}
+
+Be specific and data-driven. Reference the actual vendor metrics in your analysis. Provide at least 3 strengths, 3 weaknesses, 4 key findings, and 4 recommendations.`;
+
+      const systemMessage = 'You are a senior procurement analyst and vendor qualification expert. Provide detailed, actionable vendor assessments. Always respond with valid JSON only, no markdown formatting.';
+
+      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.2);
+      const result = this.parseJSON(response);
+
+      if (result.parseError) return result;
+
       return {
         overallScore: result.overallScore || 0,
         categoryScores: result.categoryScores || {},
-        riskLevel: result.riskLevel || 'medium',
-        recommendations: result.recommendations || []
+        riskLevel: result.riskLevel || 'MEDIUM',
+        summary: result.summary || '',
+        strengths: result.strengths || [],
+        weaknesses: result.weaknesses || [],
+        keyFindings: result.keyFindings || [],
+        recommendations: Array.isArray(result.recommendations)
+          ? result.recommendations.map((r: any) =>
+              typeof r === 'string'
+                ? { title: r, description: r, priority: 'medium', category: 'General' }
+                : { title: r.title || '', description: r.description || '', priority: r.priority || 'medium', category: r.category || 'General' }
+            )
+          : [],
       };
     } catch (error) {
       console.error('Error generating vendor score:', error);
@@ -169,39 +282,75 @@ export class AIService {
     timelineScore: number;
     riskScore: number;
     overallScore: number;
+    summary: string;
     strengths: string[];
     weaknesses: string[];
-    recommendations: string[];
+    keyFindings: string[];
+    riskLevel: string;
+    competitivePosition: string;
+    recommendations: { title: string; description: string; priority: string; category: string }[];
   }> {
     try {
-      const prompt = `Analyze this bid proposal for comprehensive evaluation:
-      
-      Bid Data: ${JSON.stringify(bidData)}
-      
-      Provide detailed scoring (0-100) for:
-      1. Technical merit and approach
-      2. Cost effectiveness
-      3. Timeline feasibility
-      4. Risk assessment
-      5. Overall recommendation
-      
-      Also identify key strengths, weaknesses, and recommendations.
-      Return as JSON format.`;
+      const prompt = `Perform a comprehensive bid proposal evaluation based on this data:
 
-      const systemMessage = 'You are a bid evaluation expert specializing in procurement analysis. Always respond with valid JSON.';
-      
-      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 1500, 0.2);
-      const result = JSON.parse(response || '{}');
-      
+Bid Data: ${JSON.stringify(bidData)}
+
+Provide a thorough analysis with the following structure (return ONLY valid JSON, no markdown):
+{
+  "overallScore": <number 0-100>,
+  "technicalScore": <number 0-100>,
+  "costScore": <number 0-100>,
+  "timelineScore": <number 0-100>,
+  "riskScore": <number 0-100>,
+  "riskLevel": "<LOW|MEDIUM|HIGH>",
+  "competitivePosition": "<1-2 sentence assessment of how competitive this bid is>",
+  "summary": "<2-3 sentence executive summary of the bid evaluation>",
+  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "weaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"],
+  "keyFindings": [
+    "<key finding about technical approach>",
+    "<key finding about cost structure>",
+    "<key finding about delivery timeline>",
+    "<key finding about risk factors>"
+  ],
+  "recommendations": [
+    {
+      "title": "<short action title>",
+      "description": "<detailed explanation>",
+      "priority": "<high|medium|low>",
+      "category": "<Technical|Cost|Timeline|Risk|Compliance>"
+    }
+  ]
+}
+
+Be specific and reference actual bid data in your analysis. Provide at least 3 strengths, 3 weaknesses, 4 key findings, and 4 recommendations with varied priorities.`;
+
+      const systemMessage = 'You are a senior bid evaluation expert with deep expertise in procurement analysis, cost modeling, and technical assessment. Provide detailed, data-driven evaluations. Always respond with valid JSON only, no markdown.';
+
+      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.2);
+      const result = this.parseJSON(response);
+
+      if (result.parseError) return result;
+
       return {
         technicalScore: result.technicalScore || 0,
         costScore: result.costScore || 0,
         timelineScore: result.timelineScore || 0,
         riskScore: result.riskScore || 0,
         overallScore: result.overallScore || 0,
+        summary: result.summary || '',
+        riskLevel: result.riskLevel || 'MEDIUM',
+        competitivePosition: result.competitivePosition || '',
         strengths: result.strengths || [],
         weaknesses: result.weaknesses || [],
-        recommendations: result.recommendations || []
+        keyFindings: result.keyFindings || [],
+        recommendations: Array.isArray(result.recommendations)
+          ? result.recommendations.map((r: any) =>
+              typeof r === 'string'
+                ? { title: r, description: r, priority: 'medium', category: 'General' }
+                : { title: r.title || '', description: r.description || '', priority: r.priority || 'medium', category: r.category || 'General' }
+            )
+          : [],
       };
     } catch (error) {
       console.error('Error analyzing bid proposal:', error);
@@ -211,33 +360,79 @@ export class AIService {
 
   static async checkCompliance(documentText: string, regulations: string[]): Promise<{
     overallCompliance: number;
-    regulationChecks: Record<string, { compliant: boolean; score: number; issues: string[] }>;
+    riskLevel: string;
+    summary: string;
+    regulationChecks: Record<string, { compliant: boolean; score: number; issues: string[]; remediationSteps: string[] }>;
     criticalIssues: string[];
-    recommendations: string[];
+    keyFindings: string[];
+    strengths: string[];
+    weaknesses: string[];
+    recommendations: { title: string; description: string; priority: string; category: string }[];
   }> {
     try {
-      const prompt = `Check this document against the following regulations: ${regulations.join(', ')}
-      
-      Document: ${documentText}
-      
-      For each regulation, assess:
-      1. Compliance status (compliant/non-compliant)
-      2. Compliance score (0-100)
-      3. Specific issues found
-      
-      Also provide overall compliance score and critical issues that need immediate attention.
-      Return as JSON format.`;
+      const regs = regulations.length > 0 ? regulations.join(', ') : 'FAR, DFARS, general procurement compliance';
 
-      const systemMessage = 'You are a compliance expert with expertise in government procurement regulations, FAR, DFARS, and industry standards. Always respond with valid JSON.';
-      
-      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.1);
-      const result = JSON.parse(response || '{}');
-      
+      const prompt = `Perform a comprehensive compliance audit of this document against the following regulations: ${regs}
+
+Document: ${documentText}
+
+Provide a thorough compliance assessment (return ONLY valid JSON, no markdown):
+{
+  "overallCompliance": <number 0-100>,
+  "riskLevel": "<LOW|MEDIUM|HIGH|CRITICAL>",
+  "summary": "<2-3 sentence executive summary of compliance status>",
+  "regulationChecks": {
+    "<regulation_name>": {
+      "compliant": <true|false>,
+      "score": <number 0-100>,
+      "issues": ["<specific issue 1>", "<specific issue 2>"],
+      "remediationSteps": ["<step to fix issue 1>", "<step to fix issue 2>"]
+    }
+  },
+  "criticalIssues": ["<critical issue requiring immediate action>"],
+  "keyFindings": [
+    "<key finding 1>",
+    "<key finding 2>",
+    "<key finding 3>",
+    "<key finding 4>"
+  ],
+  "strengths": ["<compliance strength 1>", "<compliance strength 2>", "<compliance strength 3>"],
+  "weaknesses": ["<compliance gap 1>", "<compliance gap 2>", "<compliance gap 3>"],
+  "recommendations": [
+    {
+      "title": "<short action title>",
+      "description": "<detailed remediation steps and rationale>",
+      "priority": "<high|medium|low>",
+      "category": "<Regulatory|Documentation|Process|Training|Risk>"
+    }
+  ]
+}
+
+Be thorough and specific. For each regulation, identify concrete issues and provide actionable remediation steps. Provide at least 3 strengths, 3 weaknesses, 4 key findings, and 4 recommendations.`;
+
+      const systemMessage = 'You are a senior compliance officer with deep expertise in government procurement regulations (FAR, DFARS), industry standards, data protection, and environmental compliance. Provide rigorous, specific assessments. Always respond with valid JSON only, no markdown.';
+
+      const response = await this.makeOpenRouterRequest(prompt, systemMessage, 4000, 0.1);
+      const result = this.parseJSON(response);
+
+      if (result.parseError) return result;
+
       return {
         overallCompliance: result.overallCompliance || 0,
+        riskLevel: result.riskLevel || 'MEDIUM',
+        summary: result.summary || '',
         regulationChecks: result.regulationChecks || {},
         criticalIssues: result.criticalIssues || [],
-        recommendations: result.recommendations || []
+        keyFindings: result.keyFindings || [],
+        strengths: result.strengths || [],
+        weaknesses: result.weaknesses || [],
+        recommendations: Array.isArray(result.recommendations)
+          ? result.recommendations.map((r: any) =>
+              typeof r === 'string'
+                ? { title: r, description: r, priority: 'medium', category: 'Regulatory' }
+                : { title: r.title || '', description: r.description || '', priority: r.priority || 'medium', category: r.category || 'Regulatory' }
+            )
+          : [],
       };
     } catch (error) {
       console.error('Error checking compliance:', error);
@@ -270,7 +465,7 @@ export class AIService {
       const systemMessage = 'You are an opportunity matching expert specializing in vendor-procurement alignment. Always respond with valid JSON.';
       
       const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.3);
-      const result = JSON.parse(response || '{}');
+      const result = this.parseJSON(response);
       
       return {
         opportunities: result.opportunities || [],
@@ -308,7 +503,7 @@ export class AIService {
       const systemMessage = 'You are a bid optimization expert with deep knowledge of procurement dynamics and competitive strategy. Always respond with valid JSON.';
       
       const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.2);
-      const result = JSON.parse(response || '{}');
+      const result = this.parseJSON(response);
       
       return {
         optimizedPricing: result.optimizedPricing || {},
@@ -348,7 +543,7 @@ export class AIService {
       const systemMessage = 'You are a proposal writing expert specializing in government and commercial procurement. Always respond with valid JSON.';
       
       const response = await this.makeOpenRouterRequest(prompt, systemMessage, 3000, 0.4);
-      const result = JSON.parse(response || '{}');
+      const result = this.parseJSON(response);
       
       return {
         proposal: result.proposal || '',
@@ -388,7 +583,7 @@ export class AIService {
       const systemMessage = 'You are a contract management expert specializing in performance monitoring and compliance tracking. Always respond with valid JSON.';
       
       const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2000, 0.2);
-      const result = JSON.parse(response || '{}');
+      const result = this.parseJSON(response);
       
       return {
         complianceStatus: result.complianceStatus || 'unknown',
@@ -428,7 +623,7 @@ export class AIService {
       const systemMessage = 'You are a procurement assistant chatbot with expertise in all aspects of procurement management. Always respond with valid JSON.';
       
       const response = await this.makeOpenRouterRequest(prompt, systemMessage, 1500, 0.3);
-      const result = JSON.parse(response || '{}');
+      const result = this.parseJSON(response);
       
       return {
         response: result.response || 'I can help you with procurement-related questions.',
@@ -469,7 +664,7 @@ export class AIService {
       const systemMessage = 'You are a contract negotiation expert specializing in procurement agreements. Always respond with valid JSON.';
       
       const response = await this.makeOpenRouterRequest(prompt, systemMessage, 2500, 0.2);
-      const result = JSON.parse(response || '{}');
+      const result = this.parseJSON(response);
       
       return {
         proposedTerms: result.proposedTerms || {},

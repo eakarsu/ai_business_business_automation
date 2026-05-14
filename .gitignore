@@ -144,3 +144,9 @@ coverage/
 # Storybook
 storybook-static/
 .aider*
+
+# Sensitive config files
+config.json
+config_run.json
+antropic.key
+*.key

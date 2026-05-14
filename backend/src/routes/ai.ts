@@ -1,9 +1,9 @@
 import express from 'express';
-import { AIService } from '../services/aiService';
+import rateLimit from 'express-rate-limit';
+import { AIService, parseAIJson, persistAIResult } from '../services/aiService';
 import OpenAI from 'openai';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -11,6 +11,26 @@ const openai = new OpenAI({
 });
 
 const router = express.Router();
+
+// Per-user AI rate limiter: 20 requests per hour
+const aiRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  keyGenerator: (req) => {
+    const authReq = req as AuthRequest;
+    return authReq.user?.id || req.ip || 'anonymous';
+  },
+  message: {
+    success: false,
+    error: 'AI rate limit exceeded. You may make up to 20 AI requests per hour.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Apply auth + rate limit to all AI routes
+router.use(authenticateToken);
+router.use(aiRateLimit);
 
 // Helper function to calculate median
 function calculateMedian(numbers: number[]): number {
@@ -27,7 +47,7 @@ function calculateMedian(numbers: number[]): number {
 }
 
 // Generate AI insights for procurement data
-router.post('/insights', async (req, res) => {
+router.post('/insights', async (req: AuthRequest, res) => {
   try {
     const { type, data } = req.body;
 
@@ -60,6 +80,17 @@ router.post('/insights', async (req, res) => {
         });
     }
 
+    // Persist AI result
+    await persistAIResult({
+      analysisType: type,
+      entityType: data.entityType,
+      entityId: data.entityId,
+      userId: req.user?.id,
+      inputData: data,
+      result: insights,
+      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022',
+    });
+
     return res.json({
       success: true,
       data: {
@@ -78,7 +109,7 @@ router.post('/insights', async (req, res) => {
 });
 
 // Generate comprehensive procurement recommendations
-router.post('/recommendations', async (req, res) => {
+router.post('/recommendations', async (req: AuthRequest, res) => {
   try {
     const { procurementData } = req.body;
 
@@ -90,6 +121,14 @@ router.post('/recommendations', async (req, res) => {
     }
 
     const recommendations = await generateProcurementRecommendations(procurementData);
+
+    await persistAIResult({
+      analysisType: 'procurement-recommendations',
+      userId: req.user?.id,
+      inputData: procurementData,
+      result: recommendations,
+      model: AI_MODEL,
+    });
 
     return res.json({
       success: true,
@@ -108,7 +147,7 @@ router.post('/recommendations', async (req, res) => {
 });
 
 // Generate risk assessment insights
-router.post('/risk-assessment', async (req, res) => {
+router.post('/risk-assessment', async (req: AuthRequest, res) => {
   try {
     const { entityType, entityData } = req.body;
 
@@ -120,6 +159,16 @@ router.post('/risk-assessment', async (req, res) => {
     }
 
     const riskAssessment = await generateRiskAssessment(entityType, entityData);
+
+    await persistAIResult({
+      analysisType: 'risk-assessment',
+      entityType,
+      entityId: entityData.id,
+      userId: req.user?.id,
+      inputData: { entityType, entityData },
+      result: riskAssessment,
+      model: AI_MODEL,
+    });
 
     return res.json({
       success: true,
@@ -138,7 +187,7 @@ router.post('/risk-assessment', async (req, res) => {
 });
 
 // Generate market analysis insights
-router.post('/market-analysis', async (req, res) => {
+router.post('/market-analysis', async (req: AuthRequest, res) => {
   try {
     const { category, requirements } = req.body;
 
@@ -150,6 +199,14 @@ router.post('/market-analysis', async (req, res) => {
     }
 
     const marketAnalysis = await generateMarketAnalysis(category, requirements);
+
+    await persistAIResult({
+      analysisType: 'market-analysis',
+      userId: req.user?.id,
+      inputData: { category, requirements },
+      result: marketAnalysis,
+      model: AI_MODEL,
+    });
 
     return res.json({
       success: true,
@@ -168,114 +225,105 @@ router.post('/market-analysis', async (req, res) => {
 });
 
 // Helper functions
+const AI_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022';
+
 async function generateProcurementRecommendations(procurementData: any): Promise<any> {
-  const prompt = `Based on this procurement data, provide strategic recommendations:
-  
-  Data: ${JSON.stringify(procurementData)}
-  
-  Analyze and provide recommendations for:
-  1. Vendor selection optimization
-  2. Cost reduction opportunities
-  3. Risk mitigation strategies
-  4. Process improvements
-  5. Compliance enhancements
-  6. Timeline optimizations
-  
-  Return as JSON with structured recommendations.`;
+  const prompt = `Based on this procurement data, provide strategic recommendations.
+
+Data: ${JSON.stringify(procurementData)}
+
+Return ONLY valid JSON (no markdown) with this structure:
+{
+  "executiveSummary": "<2-3 sentence overview>",
+  "vendorOptimization": [{ "recommendation": "", "rationale": "", "expectedImpact": "", "priority": "high|medium|low" }],
+  "costReduction": [{ "area": "", "currentCost": 0, "projectedSavings": 0, "action": "" }],
+  "riskMitigation": [{ "risk": "", "mitigation": "", "urgency": "high|medium|low" }],
+  "processImprovements": [{ "process": "", "improvement": "", "benefit": "" }],
+  "complianceEnhancements": [{ "regulation": "", "gap": "", "action": "" }],
+  "timelineOptimizations": [{ "phase": "", "currentDuration": "", "optimizedDuration": "", "method": "" }],
+  "overallHealthScore": 0,
+  "priorityActions": ["<top 3 immediate actions>"]
+}`;
 
   const response = await openai.chat.completions.create({
-    model: 'anthropic/claude-3.5-sonnet',
+    model: AI_MODEL,
     messages: [
-      {
-        role: 'system',
-        content: 'You are a procurement strategy expert. Provide actionable, data-driven recommendations in JSON format.'
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
+      { role: 'system', content: 'You are a senior procurement strategy expert. Provide actionable, data-driven recommendations. Always respond with valid JSON only, no markdown.' },
+      { role: 'user', content: prompt }
     ],
-    max_tokens: 2000,
+    max_tokens: 2500,
     temperature: 0.3
   });
 
-  return JSON.parse(response.choices[0]?.message?.content || '{}');
+  return parseAIJson(response.choices[0]?.message?.content) || { raw: response.choices[0]?.message?.content, parseError: true };
 }
 
 async function generateRiskAssessment(entityType: string, entityData: any): Promise<any> {
-  const prompt = `Conduct a comprehensive risk assessment for this ${entityType}:
-  
-  Data: ${JSON.stringify(entityData)}
-  
-  Assess risks in the following areas:
-  1. Financial risk
-  2. Operational risk
-  3. Compliance risk
-  4. Reputational risk
-  5. Supply chain risk
-  6. Cybersecurity risk
-  
-  For each risk category, provide:
-  - Risk level (low/medium/high)
-  - Risk score (1-10)
-  - Key risk factors
-  - Mitigation strategies
-  
-  Return as JSON with structured risk assessment.`;
+  const prompt = `Conduct a comprehensive risk assessment for this ${entityType}.
+
+Data: ${JSON.stringify(entityData)}
+
+Return ONLY valid JSON (no markdown) with this structure:
+{
+  "overallRiskScore": 0,
+  "overallRiskLevel": "LOW|MEDIUM|HIGH|CRITICAL",
+  "summary": "<executive summary of risk profile>",
+  "riskCategories": {
+    "financial": { "level": "LOW|MEDIUM|HIGH", "score": 0, "factors": [], "mitigations": [] },
+    "operational": { "level": "LOW|MEDIUM|HIGH", "score": 0, "factors": [], "mitigations": [] },
+    "compliance": { "level": "LOW|MEDIUM|HIGH", "score": 0, "factors": [], "mitigations": [] },
+    "reputational": { "level": "LOW|MEDIUM|HIGH", "score": 0, "factors": [], "mitigations": [] },
+    "supplyChain": { "level": "LOW|MEDIUM|HIGH", "score": 0, "factors": [], "mitigations": [] },
+    "cybersecurity": { "level": "LOW|MEDIUM|HIGH", "score": 0, "factors": [], "mitigations": [] }
+  },
+  "criticalRisks": ["<risks requiring immediate attention>"],
+  "recommendations": [{ "title": "", "description": "", "priority": "high|medium|low", "timeline": "" }]
+}`;
 
   const response = await openai.chat.completions.create({
-    model: 'anthropic/claude-3.5-sonnet',
+    model: AI_MODEL,
     messages: [
-      {
-        role: 'system',
-        content: 'You are a risk assessment expert specializing in procurement and vendor management. Always respond with valid JSON.'
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
+      { role: 'system', content: 'You are a risk assessment expert specializing in procurement and vendor management. Always respond with valid JSON only, no markdown.' },
+      { role: 'user', content: prompt }
     ],
-    max_tokens: 2000,
+    max_tokens: 2500,
     temperature: 0.2
   });
 
-  return JSON.parse(response.choices[0]?.message?.content || '{}');
+  return parseAIJson(response.choices[0]?.message?.content) || { raw: response.choices[0]?.message?.content, parseError: true };
 }
 
 async function generateMarketAnalysis(category: string, requirements: any): Promise<any> {
-  const prompt = `Provide market analysis for procurement category: ${category}
-  
-  Requirements: ${JSON.stringify(requirements)}
-  
-  Analyze:
-  1. Market trends and outlook
-  2. Competitive landscape
-  3. Pricing benchmarks
-  4. Supplier availability
-  5. Technology trends
-  6. Regulatory considerations
-  7. Opportunities and threats
-  
-  Provide actionable insights for procurement strategy.
-  Return as JSON with structured market analysis.`;
+  const prompt = `Provide comprehensive market analysis for procurement category: ${category}
+
+Requirements: ${JSON.stringify(requirements)}
+
+Return ONLY valid JSON (no markdown) with this structure:
+{
+  "marketOverview": "<2-3 paragraph market summary>",
+  "trends": [{ "trend": "", "direction": "growing|stable|declining", "impact": "", "timeframe": "" }],
+  "competitiveLandscape": { "marketConcentration": "fragmented|moderate|concentrated", "topSuppliers": [], "newEntrants": [] },
+  "pricingBenchmarks": { "lowRange": 0, "midRange": 0, "highRange": 0, "currency": "USD", "unit": "", "trend": "" },
+  "supplierAvailability": { "score": 0, "notes": "" },
+  "technologyTrends": ["<relevant tech trends>"],
+  "regulatoryConsiderations": ["<compliance items>"],
+  "opportunities": ["<market opportunities>"],
+  "threats": ["<market risks>"],
+  "procurementRecommendations": [{ "recommendation": "", "rationale": "", "priority": "high|medium|low" }],
+  "marketHealthScore": 0
+}`;
 
   const response = await openai.chat.completions.create({
-    model: 'anthropic/claude-3.5-sonnet',
+    model: AI_MODEL,
     messages: [
-      {
-        role: 'system',
-        content: 'You are a market research expert with deep knowledge of procurement markets and supply chain dynamics. Always respond with valid JSON.'
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
+      { role: 'system', content: 'You are a market research expert with deep knowledge of procurement markets and supply chain dynamics. Always respond with valid JSON only, no markdown.' },
+      { role: 'user', content: prompt }
     ],
-    max_tokens: 2000,
+    max_tokens: 2500,
     temperature: 0.4
   });
 
-  return JSON.parse(response.choices[0]?.message?.content || '{}');
+  return parseAIJson(response.choices[0]?.message?.content) || { raw: response.choices[0]?.message?.content, parseError: true };
 }
 
 // Calculate AI-driven procurement statistics
@@ -710,44 +758,57 @@ async function calculateVendorScoreStats(): Promise<any> {
 }
 
 async function calculateBidAnalysisStats(): Promise<any> {
-  // Mock bid analysis statistics
-  const mockBidStats = {
-    totalBidsAnalyzed: 67,
-    averageScores: {
-      technical: 74.5,
-      cost: 78.2,
-      timeline: 71.8,
-      risk: 76.3,
-      overall: 75.2
-    },
-    winningBidCharacteristics: {
-      averageTechnicalScore: 88.3,
-      averageCostScore: 82.1,
-      averageTimelineScore: 79.5,
-      averageRiskScore: 85.7
-    },
-    analysisAccuracy: {
-      correctPredictions: 89.6,
-      falsePositives: 4.2,
-      falseNegatives: 6.2
-    },
-    timeToCompletion: {
-      average: 3.4, // minutes
-      fastest: 1.2,
-      slowest: 8.7
-    },
-    insightsGenerated: {
-      strengths: 201,
-      weaknesses: 167,
-      recommendations: 289
-    }
-  };
+  try {
+    const allBids = await prisma.bid.findMany({
+      select: { technicalScore: true, costScore: true, timelineScore: true, riskScore: true, overallScore: true, status: true }
+    });
 
-  return mockBidStats;
+    const scoredBids = allBids.filter(b => b.overallScore !== null);
+    const awardedBids = allBids.filter(b => b.status === 'AWARDED' && b.overallScore !== null);
+
+    const avg = (arr: (number | null)[], key: keyof typeof arr[0]) => {
+      const vals = arr.map((b: any) => b[key]).filter((v: any) => v !== null) as number[];
+      return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    };
+
+    const evaluations = await prisma.bidEvaluation.findMany({
+      select: { strengths: true, weaknesses: true, recommendations: true }
+    });
+
+    const totalStrengths = evaluations.reduce((s, e) => s + e.strengths.length, 0);
+    const totalWeaknesses = evaluations.reduce((s, e) => s + e.weaknesses.length, 0);
+    const totalRecommendations = evaluations.reduce((s, e) => s + e.recommendations.length, 0);
+
+    return {
+      totalBidsAnalyzed: scoredBids.length,
+      totalBids: allBids.length,
+      averageScores: {
+        technical: parseFloat(avg(scoredBids, 'technicalScore').toFixed(1)),
+        cost: parseFloat(avg(scoredBids, 'costScore').toFixed(1)),
+        timeline: parseFloat(avg(scoredBids, 'timelineScore').toFixed(1)),
+        risk: parseFloat(avg(scoredBids, 'riskScore').toFixed(1)),
+        overall: parseFloat(avg(scoredBids, 'overallScore').toFixed(1)),
+      },
+      winningBidCharacteristics: {
+        averageTechnicalScore: parseFloat(avg(awardedBids, 'technicalScore').toFixed(1)),
+        averageCostScore: parseFloat(avg(awardedBids, 'costScore').toFixed(1)),
+        averageTimelineScore: parseFloat(avg(awardedBids, 'timelineScore').toFixed(1)),
+        averageRiskScore: parseFloat(avg(awardedBids, 'riskScore').toFixed(1)),
+      },
+      insightsGenerated: {
+        strengths: totalStrengths,
+        weaknesses: totalWeaknesses,
+        recommendations: totalRecommendations,
+      }
+    };
+  } catch (error) {
+    console.error('Error calculating bid analysis stats:', error);
+    throw error;
+  }
 }
 
 // Trigger AI analysis for entities
-router.post('/trigger-analysis', async (req, res) => {
+router.post('/trigger-analysis', async (req: AuthRequest, res) => {
   try {
     const { entityType, entityId, analysisTypes } = req.body;
 
@@ -758,7 +819,7 @@ router.post('/trigger-analysis', async (req, res) => {
       });
     }
 
-    const analysisJob = await triggerAnalysisJob(entityType, entityId, analysisTypes);
+    const analysisJob = await triggerAnalysisJob(entityType, entityId, analysisTypes, req.user?.id);
 
     return res.json({
       success: true,
@@ -798,7 +859,7 @@ router.get('/analysis-status/:jobId', async (req, res) => {
 });
 
 // Bulk trigger analysis for multiple entities
-router.post('/bulk-trigger', async (req, res) => {
+router.post('/bulk-trigger', async (req: AuthRequest, res) => {
   try {
     const { entities, analysisTypes } = req.body;
 
@@ -809,7 +870,7 @@ router.post('/bulk-trigger', async (req, res) => {
       });
     }
 
-    const bulkJob = await triggerBulkAnalysis(entities, analysisTypes);
+    const bulkJob = await triggerBulkAnalysis(entities, analysisTypes, req.user?.id);
 
     return res.json({
       success: true,
@@ -862,13 +923,61 @@ router.post('/schedule-analysis', async (req, res) => {
   }
 });
 
-// Helper functions for analysis triggers
-async function triggerAnalysisJob(entityType: string, entityId: string, analysisTypes: string[]): Promise<any> {
-  // Mock job creation - in real implementation, this would queue a job
+// Helper functions for analysis triggers — backed by AI results table
+async function triggerAnalysisJob(entityType: string, entityId: string, analysisTypes: string[], userId?: string): Promise<any> {
   const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const estimatedDuration = analysisTypes.length * 30; // 30 seconds per analysis type
-  
-  const job = {
+  const estimatedDuration = analysisTypes.length * 30;
+
+  // Store initial job record in ai_results
+  try {
+    await (prisma as any).aIResult.create({
+      data: {
+        analysisType: 'analysis-job',
+        entityType,
+        entityId,
+        userId: userId || null,
+        inputData: { jobId, analysisTypes, status: 'queued' },
+        result: { jobId, status: 'queued', analysisTypes },
+        model: AI_MODEL,
+      },
+    });
+  } catch (e) {
+    console.error('Failed to store job record:', e);
+  }
+
+  // Process asynchronously
+  setImmediate(async () => {
+    try {
+      for (const analysisType of analysisTypes) {
+        // Fetch entity data and run appropriate analysis
+        if (entityType === 'vendor' && analysisType === 'vendor-analysis') {
+          const vendor = await prisma.vendor.findUnique({ where: { id: entityId } });
+          if (vendor) {
+            const result = await AIService.generateVendorScore(vendor);
+            await persistAIResult({ analysisType: 'vendor-scoring', entityType: 'vendor', entityId, userId, inputData: vendor, result, model: AI_MODEL });
+            // Update vendor scores
+            await prisma.vendor.update({
+              where: { id: entityId },
+              data: {
+                overallScore: result.overallScore,
+                riskLevel: (result.riskLevel as any) || 'MEDIUM',
+              },
+            });
+          }
+        } else if (entityType === 'bid' && analysisType === 'bid-analysis') {
+          const bid = await prisma.bid.findUnique({ where: { id: entityId }, include: { vendor: true } });
+          if (bid) {
+            const result = await AIService.analyzeBidProposal(bid);
+            await persistAIResult({ analysisType: 'bid-evaluation', entityType: 'bid', entityId, userId, inputData: bid, result, model: AI_MODEL });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Background analysis error:', err);
+    }
+  });
+
+  return {
     id: jobId,
     entityType,
     entityId,
@@ -877,127 +986,77 @@ async function triggerAnalysisJob(entityType: string, entityId: string, analysis
     estimatedCompletion: new Date(Date.now() + estimatedDuration * 1000).toISOString(),
     createdAt: new Date().toISOString()
   };
-
-  // Simulate async processing
-  setTimeout(async () => {
-    await processAnalysisJob(job);
-  }, 1000);
-
-  return job;
-}
-
-async function processAnalysisJob(job: any): Promise<void> {
-  // Mock job processing
-  job.status = 'processing';
-  job.startedAt = new Date().toISOString();
-
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 5000));
-
-  job.status = 'completed';
-  job.completedAt = new Date().toISOString();
-  job.results = {
-    analysisCount: job.analysisTypes.length,
-    insights: `Analysis completed for ${job.entityType} ${job.entityId}`,
-    recommendations: ['Recommendation 1', 'Recommendation 2']
-  };
 }
 
 async function getAnalysisJobStatus(jobId: string): Promise<any> {
-  // Mock job status retrieval
-  const mockStatus = {
-    jobId,
-    status: 'completed',
-    progress: 100,
-    createdAt: new Date(Date.now() - 300000).toISOString(),
-    startedAt: new Date(Date.now() - 240000).toISOString(),
-    completedAt: new Date(Date.now() - 60000).toISOString(),
-    results: {
-      analysisCount: 3,
-      insights: 'Comprehensive analysis completed successfully',
-      recommendations: [
-        'Improve vendor qualification process',
-        'Implement risk mitigation strategies',
-        'Optimize bid evaluation criteria'
-      ]
+  // Look up recent AI results for context
+  try {
+    const recent = await (prisma as any).aIResult.findFirst({
+      where: { inputData: { path: ['jobId'], equals: jobId } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (recent) {
+      return {
+        jobId,
+        status: 'completed',
+        progress: 100,
+        createdAt: recent.createdAt,
+        results: recent.result,
+      };
     }
-  };
+  } catch (e) { /* fall through */ }
 
-  return mockStatus;
+  return {
+    jobId,
+    status: 'unknown',
+    progress: 0,
+    message: 'Job not found or already completed',
+  };
 }
 
-async function triggerBulkAnalysis(entities: any[], analysisTypes: string[]): Promise<any> {
-  // Mock bulk job creation
+async function triggerBulkAnalysis(entities: any[], analysisTypes: string[], userId?: string): Promise<any> {
   const bulkJobId = `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const estimatedDuration = entities.length * analysisTypes.length * 30; // 30 seconds per analysis
-  
-  const bulkJob = {
+
+  setImmediate(async () => {
+    for (const entity of entities) {
+      try {
+        await triggerAnalysisJob(entity.type || 'vendor', entity.id, analysisTypes, userId);
+      } catch (e) {
+        console.error('Bulk analysis entity error:', e);
+      }
+    }
+  });
+
+  return {
     id: bulkJobId,
     entities,
     analysisTypes,
     status: 'queued',
     totalEntities: entities.length,
-    processedEntities: 0,
-    estimatedCompletion: new Date(Date.now() + estimatedDuration * 1000).toISOString(),
+    estimatedCompletion: new Date(Date.now() + entities.length * 30000).toISOString(),
     createdAt: new Date().toISOString()
-  };
-
-  // Simulate async bulk processing
-  setTimeout(async () => {
-    await processBulkAnalysis(bulkJob);
-  }, 2000);
-
-  return bulkJob;
-}
-
-async function processBulkAnalysis(bulkJob: any): Promise<void> {
-  // Mock bulk processing
-  bulkJob.status = 'processing';
-  bulkJob.startedAt = new Date().toISOString();
-
-  // Simulate processing each entity
-  for (let i = 0; i < bulkJob.entities.length; i++) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    bulkJob.processedEntities = i + 1;
-  }
-
-  bulkJob.status = 'completed';
-  bulkJob.completedAt = new Date().toISOString();
-  bulkJob.results = {
-    totalProcessed: bulkJob.entities.length,
-    successfulAnalyses: bulkJob.entities.length - 1,
-    failedAnalyses: 1,
-    aggregatedInsights: 'Bulk analysis completed successfully'
   };
 }
 
 async function scheduleRecurringAnalysis(entityType: string, schedule: string, analysisTypes: string[]): Promise<any> {
-  // Mock scheduled job creation
   const scheduleId = `schedule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  const scheduledJob = {
-    id: scheduleId,
-    entityType,
-    schedule,
-    analysisTypes,
-    status: 'active',
-    nextRun: calculateNextRun(schedule),
-    createdAt: new Date().toISOString()
-  };
-
-  return scheduledJob;
-}
-
-function calculateNextRun(schedule: string): string {
-  // Mock next run calculation
   const scheduleMap: { [key: string]: number } = {
     'daily': 24 * 60 * 60 * 1000,
     'weekly': 7 * 24 * 60 * 60 * 1000,
     'monthly': 30 * 24 * 60 * 60 * 1000
   };
+  const delay = scheduleMap[schedule] || scheduleMap['daily']!;
 
-  const delay = scheduleMap[schedule] || scheduleMap['daily'] || 24 * 60 * 60 * 1000;
-  return new Date(Date.now() + delay).toISOString();
+  return {
+    id: scheduleId,
+    entityType,
+    schedule,
+    analysisTypes,
+    status: 'active',
+    nextRun: new Date(Date.now() + delay).toISOString(),
+    createdAt: new Date().toISOString(),
+    note: 'Schedule created. Implement a cron service (node-cron/bull) to execute recurring jobs.'
+  };
 }
 
 // Discover procurement opportunities for vendors
@@ -1196,6 +1255,283 @@ router.post('/negotiate-terms', async (req, res) => {
       success: false,
       error: 'Failed to provide negotiation support'
     });
+  }
+});
+
+// SSE streaming for vendor score analysis
+// GET /api/ai/vendor-score/stream?vendorId=X
+router.get('/vendor-score/stream', async (req: AuthRequest, res) => {
+  const { vendorId } = req.query;
+
+  if (!vendorId) {
+    return res.status(400).json({ success: false, error: 'vendorId is required' });
+  }
+
+  const vendor = await prisma.vendor.findUnique({
+    where: { id: vendorId as string },
+    include: {
+      _count: { select: { bids: true, evaluations: true, complianceChecks: true } }
+    }
+  });
+
+  if (!vendor) {
+    return res.status(404).json({ success: false, error: 'Vendor not found' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const sendEvent = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    sendEvent('status', { step: 1, total: 4, message: 'Loading vendor data...' });
+
+    const [recentBids, recentEvaluations, recentCompliance] = await Promise.all([
+      prisma.bid.findMany({
+        where: { vendorId: vendorId as string },
+        orderBy: { submittedAt: 'desc' },
+        take: 10,
+        select: { status: true, overallScore: true, proposedAmount: true, submittedAt: true }
+      }),
+      prisma.vendorEvaluation.findMany({
+        where: { vendorId: vendorId as string },
+        orderBy: { evaluatedAt: 'desc' },
+        take: 3,
+        select: { overallScore: true, riskLevel: true, evaluatedAt: true }
+      }),
+      prisma.complianceCheck.findMany({
+        where: { vendorId: vendorId as string },
+        orderBy: { checkedAt: 'desc' },
+        take: 5,
+        select: { complianceScore: true, checkResult: true, regulationType: true }
+      })
+    ]);
+
+    sendEvent('status', { step: 2, total: 4, message: 'Analyzing financial indicators...' });
+
+    const vendorData = {
+      ...vendor,
+      recentBids,
+      recentEvaluations,
+      recentCompliance,
+      bidWinRate: recentBids.length > 0
+        ? (recentBids.filter(b => b.status === 'AWARDED').length / recentBids.length) * 100
+        : 0
+    };
+
+    sendEvent('status', { step: 3, total: 4, message: 'Running AI scoring model...' });
+
+    const score = await AIService.generateVendorScore(vendorData);
+
+    sendEvent('status', { step: 4, total: 4, message: 'Finalizing results...' });
+
+    // Persist score to vendor record and ai_results
+    await Promise.all([
+      prisma.vendor.update({
+        where: { id: vendorId as string },
+        data: {
+          overallScore: score.overallScore,
+          financialScore: score.categoryScores?.financial_stability ?? null,
+          technicalScore: score.categoryScores?.technical_capability ?? null,
+          complianceScore: score.categoryScores?.compliance_history ?? null,
+          experienceScore: score.categoryScores?.experience ?? null,
+          riskLevel: (score.riskLevel as any) || 'MEDIUM',
+        },
+      }),
+      prisma.vendorEvaluation.create({
+        data: {
+          vendorId: vendorId as string,
+          evaluationType: 'AI_SCORING',
+          overallScore: score.overallScore,
+          categoryScores: score.categoryScores || {},
+          riskLevel: (score.riskLevel as any) || 'MEDIUM',
+          strengths: score.strengths || [],
+          weaknesses: score.weaknesses || [],
+          recommendations: score.recommendations?.map((r: any) => r.description || r.title || String(r)) || [],
+        },
+      }),
+      persistAIResult({
+        analysisType: 'vendor-scoring',
+        entityType: 'vendor',
+        entityId: vendorId as string,
+        userId: req.user?.id,
+        inputData: vendorData,
+        result: score,
+        model: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022',
+      }),
+    ]).catch(err => console.error('Non-critical: failed to persist vendor score:', err));
+
+    sendEvent('result', {
+      vendorId,
+      vendorName: vendor.name,
+      score,
+      computedAt: new Date().toISOString()
+    });
+
+    sendEvent('done', { message: 'Analysis complete' });
+  } catch (error) {
+    console.error('SSE vendor score error:', error);
+    sendEvent('error', { message: 'Failed to complete vendor scoring analysis' });
+  } finally {
+    res.end();
+  }
+  return;
+});
+
+// POST /api/ai/rfp/generate - Generate full RFP document
+router.post('/rfp/generate', async (req: AuthRequest, res) => {
+  try {
+    const { category, requirements, budget, timeline, evaluationCriteria, additionalContext } = req.body;
+
+    if (!category || !requirements || !Array.isArray(requirements) || requirements.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'category and requirements (non-empty array) are required'
+      });
+    }
+
+    const model = AI_MODEL;
+
+    const prompt = `Generate a comprehensive Request for Proposal (RFP) document for the following procurement need:
+
+Category: ${category}
+Requirements:
+${requirements.map((r: string, i: number) => `${i + 1}. ${r}`).join('\n')}
+${budget ? `Budget: ${budget}` : ''}
+${timeline ? `Timeline: ${timeline}` : ''}
+${evaluationCriteria ? `Evaluation Criteria: ${JSON.stringify(evaluationCriteria)}` : ''}
+${additionalContext ? `Additional Context: ${additionalContext}` : ''}
+
+Generate a complete, professional RFP document with the following structure (return ONLY valid JSON, no markdown):
+{
+  "title": "<RFP title>",
+  "rfpNumber": "<auto-generated RFP-YYYY-XXX format>",
+  "issuedDate": "<today's date>",
+  "dueDate": "<30 days from today>",
+  "executiveSummary": "<2-3 paragraph overview of procurement need>",
+  "sections": {
+    "background": "<organization background and context>",
+    "scopeOfWork": "<detailed scope including all requirements>",
+    "technicalRequirements": "<specific technical specifications>",
+    "deliverables": "<list of expected deliverables with dates>",
+    "timeline": "<project timeline with milestones>",
+    "budgetGuidance": "<budget range and payment terms>",
+    "vendorQualifications": "<minimum qualifications and certifications required>",
+    "evaluationCriteria": "<how proposals will be scored and evaluated>",
+    "submissionInstructions": "<how to submit, format requirements, contact info>",
+    "termsAndConditions": "<key legal and compliance requirements>"
+  },
+  "evaluationMatrix": [
+    { "criterion": "<criterion name>", "weight": <percentage>, "description": "<what is evaluated>" }
+  ],
+  "questions": [
+    "<clarifying question vendors typically ask>"
+  ],
+  "complianceChecklist": [
+    "<required compliance item>"
+  ]
+}
+
+Be thorough, professional, and specific to the ${category} procurement category.`;
+
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a senior procurement specialist with expertise in writing comprehensive, legally sound RFP documents for government and commercial procurement. Always respond with valid JSON only, no markdown formatting.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 4000,
+      temperature: 0.3
+    });
+
+    const rfpDocument = parseAIJson(response.choices[0]?.message?.content) || { raw: response.choices[0]?.message?.content, parseError: true };
+
+    await persistAIResult({
+      analysisType: 'rfp-document-generation',
+      userId: req.user?.id,
+      inputData: { category, requirements, budget, timeline },
+      result: rfpDocument,
+      model,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        rfp: rfpDocument,
+        category,
+        requirements,
+        generatedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error generating RFP:', error);
+    return res.status(500).json({ success: false, error: 'Failed to generate RFP document' });
+  }
+});
+
+// GET /api/ai/results — list persisted AI results with pagination
+router.get('/results', async (req: AuthRequest, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const skip = (page - 1) * limit;
+    const analysisType = req.query.analysisType as string;
+    const entityType = req.query.entityType as string;
+    const entityId = req.query.entityId as string;
+
+    const where: any = {};
+    if (analysisType) where.analysisType = analysisType;
+    if (entityType) where.entityType = entityType;
+    if (entityId) where.entityId = entityId;
+
+    const [results, total] = await Promise.all([
+      (prisma as any).aIResult.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          analysisType: true,
+          entityType: true,
+          entityId: true,
+          userId: true,
+          model: true,
+          createdAt: true,
+          result: true,
+        },
+      }),
+      (prisma as any).aIResult.count({ where }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: results,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    console.error('Error fetching AI results:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch AI results' });
+  }
+});
+
+// GET /api/ai/results/:id — get single AI result
+router.get('/results/:id', async (req: AuthRequest, res) => {
+  try {
+    const result = await (prisma as any).aIResult.findUnique({ where: { id: req.params.id } });
+    if (!result) return res.status(404).json({ success: false, error: 'AI result not found' });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error fetching AI result:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch AI result' });
   }
 });
 

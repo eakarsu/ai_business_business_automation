@@ -53,7 +53,7 @@ export default function AIAnalysisResults({ results, analysisType, onRunAnother 
               </div>
               <div className="flex-1">
                 <h4 className="font-medium text-blue-900 mb-2">
-                  {rec.category ? rec.category.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()) : `Recommendation ${index + 1}`}
+                  {rec.category ? rec.category.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase()) : `Recommendation ${index + 1}`}
                 </h4>
                 {rec.priority && (
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mb-2 ${
