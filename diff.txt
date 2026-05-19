@@ -1,0 +1,312 @@
+ 1. Existing File: frontend/src/app/bids/page.tsx
+
+  Changes:
+  - Add tabs for bid status filtering
+  - Add product column with links to product pages
+  - Update styling for status badges
+
+  // frontend/src/app/bids/page.tsx
+  'use client';
+
+  import { useState, useEffect } from 'react';
+  import Link from 'next/link';
+  + import { Bid } from '@/types/bid'; // New import
+
+  export default function BidManagement() {
+    const [bids, setBids] = useState<Bid[]>([]); // Updated state type
+    const [loading, setLoading] = useState(true);
+  +  const [activeTab, setActiveTab] = useState('all'); // New state for tabs
+
+    useEffect(() => {
+      const fetchBids = async () => {
+        try {
+          const response = await fetch('/api/bids');
+          const data = await response.json();
+          setBids(data);
+        } catch (error) {
+          console.error('Failed to fetch bids:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchBids();
+    }, []);
+
+  +  // New: Status styling
+    const statusStyles = {
+      submitted: 'bg-blue-100 text-blue-800',
+      'under evaluation': 'bg-yellow-100 text-yellow-800',
+      'counter offered': 'bg-purple-100 text-purple-800',
+      awarded: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800'
+    };
+
+  +  // New: Filter bids by active tab
+    const filteredBids = bids.filter(bid =>
+      activeTab === 'all' || bid.status.toLowerCase() === activeTab
+    );
+
+    if (loading) return <div>Loading...</div>;
+
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Bid Management</h1>
+          <button
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            onClick={() => document.getElementById('add-bid-modal').classList.remove('hidden')}
+          >
+            Add Bid
+          </button>
+        </div>
+
+  +     {/* New: Tabs */}
+  +     <div className="mb-6 border-b border-gray-200">
+  +       <nav className="flex space-x-4" aria-label="Tabs">
+  +         {['all', 'submitted', 'under evaluation', 'counter offered', 'awarded', 'rejected'].map((tab) => (
+  +           <button
+  +             key={tab}
+  +             onClick={() => setActiveTab(tab)}
+  +             className={`${
+  +               activeTab === tab
+  +                 ? 'border-blue-500 text-blue-600'
+  +                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+  +             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+  +           >
+  +             {tab.charAt(0).toUpperCase() + tab.slice(1)}
+  +           </button>
+  +         ))}
+  +       </nav>
+  +     </div>
+
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Bid Title
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Vendor
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Amount
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Category
+              </th>
+  +           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+  +             Status
+  +           </th>
+  +           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+  +             Product
+  +           </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+  +         {filteredBids.map((bid) => ( // Updated to use filteredBids
+              <tr key={bid.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4">{bid.title}</td>
+                <td className="px-6 py-4">{bid.vendor}</td>
+                <td className="px-6 py-4">{bid.amount ? `$${bid.amount.toLocaleString()}` : '-'}</td>
+                <td className="px-6 py-4">{bid.category}</td>
+  +             <td className="px-6 py-4">
+  +               <span className={`${statusStyles[bid.status.toLowerCase()]} px-2 py-1 rounded`}>
+  +                 {bid.status}
+  +               </span>
+  +             </td>
+  +             <td className="px-6 py-4">
+  +               <Link
+  +                 href={`/products/${bid.productId}`}
+  +                 className="text-blue-600 hover:underline flex items-center"
+  +               >
+  +                 {bid.productName}
+  +                 <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  +                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+  +                 </svg>
+  +               </Link>
+  +             </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  ---
+  2. New File: frontend/src/types/bid.ts
+
+  Created to define the Bid interface:
+  // frontend/src/types/bid.ts
+  export interface Bid {
+    id: string;
+    title: string;
+    vendor: string;
+    amount?: number;
+    category: string;
+    status: 'Submitted' | 'Under Evaluation' | 'Counter Offered' | 'Awarded' | 'Rejected';
+    productId: string;
+    productName: string;
+    createdAt: string;
+  }
+
+  ---
+  3. Existing File: frontend/src/app/api/bids/route.ts
+
+  Changes:
+  - Update GET endpoint to filter bids by productId (for product page integration)
+
+  // frontend/src/app/api/bids/route.ts
+  import { NextResponse } from 'next/server';
+  import { Bid } from '@/types/bid';
+
+  let mockBids: Bid[] = [/* ... existing mock data ... */];
+
+  export async function GET(request: Request) {
+  +  const { searchParams } = new URL(request.url);
+  +  const productId = searchParams.get('productId');
+
+  +  // Filter by productId if provided
+  +  const filteredBids = productId
+  +    ? mockBids.filter(bid => bid.productId === productId)
+  +    : mockBids;
+
+    return NextResponse.json(filteredBids);
+  }
+
+  export async function POST(request: Request) { /* ... existing code ... */ }
+
+  ---
+  4. Existing File: frontend/src/app/products/[id]/page.tsx
+
+  Changes:
+  - Add section to display related bids
+  - Fetch bids for the current product
+
+  // frontend/src/app/products/[id]/page.tsx
+  'use client';
+
+  import { useState, useEffect } from 'react';
+  import { useParams } from 'next/navigation';
+  + import Link from 'next/link';
+
+  export default function ProductPage() {
+    const { id } = useParams();
+    const [product, setProduct] = useState<any>(null);
+  +  const [bids, setBids] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      const fetchData = async () => {
+        try {
+          // Fetch product
+          const productResponse = await fetch('/api/products');
+          const products = await productResponse.json();
+          const foundProduct = products.find((p: any) => p.id === id);
+          setProduct(foundProduct || null);
+
+  +       // Fetch bids for this product
+  +       const bidsResponse = await fetch(`/api/bids?productId=${id}`);
+  +       const bidsData = await bidsResponse.json();
+  +       setBids(bidsData);
+        } catch (error) {
+          console.error('Failed to fetch data:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchData();
+    }, [id]);
+
+  +  // New: Status styling (reused from bids page)
+  +  const statusStyles = {
+  +    submitted: 'bg-blue-100 text-blue-800',
+  +    'under evaluation': 'bg-yellow-100 text-yellow-800',
+  +    'counter offered': 'bg-purple-100 text-purple-800',
+  +    awarded: 'bg-green-100 text-green-800',
+  +    rejected: 'bg-red-100 text-red-800'
+  +  };
+
+    if (loading) return <div>Loading...</div>;
+    if (!product) return <div>Product not found</div>;
+
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold mb-6">{product.name}</h1>
+        <div className="bg-white p-6 rounded-lg shadow">
+          {/* ... existing product details ... */}
+        </div>
+
+  +     {/* New: Related Bids Section */}
+  +     <div className="mt-8">
+  +       <h2 className="text-2xl font-bold mb-4">Related Bids</h2>
+  +       {bids.length > 0 ? (
+  +         <table className="min-w-full divide-y divide-gray-200">
+  +           <thead className="bg-gray-50">
+  +             <tr>
+  +               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+  +                 Bid Title
+  +               </th>
+  +               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+  +                 Vendor
+  +               </th>
+  +               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+  +                 Amount
+  +               </th>
+  +               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+  +                 Status
+  +               </th>
+  +             </tr>
+  +           </thead>
+  +           <tbody className="bg-white divide-y divide-gray-200">
+  +             {bids.map((bid) => (
+  +               <tr key={bid.id} className="hover:bg-gray-50">
+  +                 <td className="px-6 py-4">{bid.title}</td>
+  +                 <td className="px-6 py-4">{bid.vendor}</td>
+  +                 <td className="px-6 py-4">{bid.amount ? `$${bid.amount.toLocaleString()}` : '-'}</td>
+  +                 <td className="px-6 py-4">
+  +                   <span className={`${statusStyles[bid.status.toLowerCase()]} px-2 py-1 rounded`}>
+  +                     {bid.status}
+  +                   </span>
+  +                 </td>
+  +               </tr>
+  +             ))}
+  +           </tbody>
+  +         </table>
+  +       ) : (
+  +         <p>No bids found for this product.</p>
+  +       )}
+  +     </div>
+      </div>
+    );
+  }
+
+  ---
+  5. Existing File: frontend/src/app/globals.css
+
+  Changes:
+  - Add CSS classes for status badges
+
+  @tailwind base;
+  @tailwind components;
+  @tailwind utilities;
+
+  @layer components {
+  +  .status-submitted {
+  +    @apply bg-blue-100 text-blue-800 px-2 py-1 rounded;
+  +  }
+  +  .status-under-evaluation {
+  +    @apply bg-yellow-100 text-yellow-800 px-2 py-1 rounded;
+  +  }
+  +  .status-counter-offered {
+  +    @apply bg-purple-100 text-purple-800 px-2 py-1 rounded;
+  +  }
+  +  .status-awarded {
+  +    @apply bg-green-100 text-green-800 px-2 py-1 rounded;
+  +  }
+  +  .status-rejected {
+  +    @apply bg-red-100 text-red-800 px-2 py-1 rounded;
+  +  }
+  }

@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_URL } from '@/lib/api';
+import { passwordStrength } from '@/lib/validation';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -27,7 +29,7 @@ export default function RegisterPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/auth/register', {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,6 +56,22 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  const passwordError = useMemo(() => passwordStrength(formData.password), [formData.password]);
+
+  const passwordStrengthLevel = useMemo(() => {
+    if (!formData.password) return 0;
+    let score = 0;
+    if (formData.password.length >= 8) score++;
+    if (/[A-Z]/.test(formData.password)) score++;
+    if (/[a-z]/.test(formData.password)) score++;
+    if (/[0-9]/.test(formData.password)) score++;
+    if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(formData.password)) score++;
+    return score;
+  }, [formData.password]);
+
+  const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'][passwordStrengthLevel] || '';
+  const strengthColor = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500', 'bg-emerald-500'][passwordStrengthLevel] || '';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -116,6 +134,22 @@ export default function RegisterPage() {
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 />
               </div>
+              {formData.password && (
+                <div className="mt-2">
+                  <div className="flex gap-1 mb-1">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <div
+                        key={level}
+                        className={`h-1.5 flex-1 rounded-full ${level <= passwordStrengthLevel ? strengthColor : 'bg-gray-200'}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex justify-between">
+                    <p className="text-xs text-gray-500">{strengthLabel}</p>
+                    {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

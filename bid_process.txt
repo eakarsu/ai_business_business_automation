@@ -1,0 +1,44 @@
+ Bid Lifecycle & Workflow
+
+  1. Bid Creation (frontend/src/app/bids/page.tsx:66-93)
+  - Users access the bid management page with authentication verification
+  - "Add Bid" form captures: title, vendor name, amount, description, category
+  - Form validates required fields and submits via POST to /api/bids
+  - New bids automatically start with "SUBMITTED" status
+
+  2. Status Management (backend/src/routes/bids.ts:101-141)
+  - Four status stages: submitted → under_review → approved/rejected
+  - Status changes handled via PUT /api/bids/:id endpoint
+  - Real-time status updates with dropdown selection in UI
+
+  3. Backend API Architecture (backend/src/routes/bids.ts)
+  - GET /api/bids - Fetch all bids with vendor relationships
+  - GET /api/bids/:id - Get specific bid details
+  - POST /api/bids - Create new bid (requires title, description, budget)
+  - PUT /api/bids/:id - Update bid details/status
+  - DELETE /api/bids/:id - Remove bid from system
+
+  4. Data Structure
+  interface Bid {
+    id: number;
+    title: string;
+    vendor_name: string;
+    amount: number;
+    status: 'submitted' | 'under_review' | 'approved' | 'rejected';
+    submission_date: string;
+    description: string;
+    category: string;
+  }
+
+  5. AI Integration (backend/src/services/aiService.ts:166-210)
+  - analyzeBidProposal() provides automated bid evaluation
+  - Scores: technical merit, cost effectiveness, timeline feasibility, risk assessment
+  - Returns structured analysis with strengths, weaknesses, recommendations
+
+  6. User Interface Features (frontend/src/app/bids/page.tsx)
+  - Filter tabs by status (All, Submitted, Under Review, Approved, Rejected)
+  - Visual status indicators with color coding
+  - Inline status change capability
+  - Comprehensive bid details display with vendor information
+
+  The system provides end-to-end bid management from submission through approval/rejection with AI-powered analysis capabilities.

@@ -94,18 +94,22 @@ enum CounterOfferStatus {
 
 // Models
 model User {
-  id              String            @id @default(cuid())
-  email           String            @unique
-  password        String
-  firstName       String
-  lastName        String
-  role            Role              @default(USER)
-  department      String?
-  organization    String?
-  isActive        Boolean           @default(true)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  lastLoginAt     DateTime?
+  id                String            @id @default(cuid())
+  email             String            @unique
+  password          String
+  firstName         String
+  lastName          String
+  role              Role              @default(USER)
+  department        String?
+  organization      String?
+  isActive          Boolean           @default(true)
+  emailVerified     Boolean           @default(false)
+  verificationToken String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  lastLoginAt       DateTime?
 
   // Relations
   vendorsCreated    Vendor[]          @relation("VendorCreatedBy")
@@ -375,5 +379,187 @@ model CounterOffer {
   bid                  Bid                 @relation(fields: [bidId], references: [id], onDelete: Cascade)
 
   @@map("counter_offers")
+}
+
+// Contract Management for AI Contract Negotiator
+enum ContractStatus {
+  DRAFT
+  PENDING_REVIEW
+  NEGOTIATING
+  APPROVED
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  RENEWED
+}
+
+model Contract {
+  id                   String            @id @default(cuid())
+  title                String
+  contractNumber       String            @unique
+  vendorId             String
+  vendorName           String
+  description          String?
+  category             String
+  startDate            DateTime
+  endDate              DateTime
+  totalValue           Float
+  currency             String            @default("USD")
+  paymentTerms         String?
+  deliveryTerms        String?
+  warrantyTerms        String?
+  liabilityTerms       String?
+  terminationClause    String?
+  renewalClause        String?
+  status               ContractStatus    @default(DRAFT)
+  riskLevel            RiskLevel         @default(MEDIUM)
+  complianceScore      Float?
+  aiAnalysis           Json?
+  negotiationHistory   Json?
+  terms                Json?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@map("contracts")
+}
+
+// RFP Management for AI RFP Generator
+enum RFPStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  AWARDED
+  CANCELLED
+}
+
+model RFP {
+  id                   String            @id @default(cuid())
+  title                String
+  rfpNumber            String            @unique
+  description          String
+  category             String
+  department           String
+  budget               Float?
+  currency             String            @default("USD")
+  submissionDeadline   DateTime
+  evaluationCriteria   Json?
+  requirements         Json?
+  technicalSpecs       String?
+  complianceReqs       String[]
+  deliverables         Json?
+  timeline             Json?
+  status               RFPStatus         @default(DRAFT)
+  aiGeneratedContent   Json?
+  publishedAt          DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@map("rfps")
+}
+
+// Spend Analysis for AI Spend Analyzer
+enum SpendCategory {
+  IT_EQUIPMENT
+  SOFTWARE
+  OFFICE_SUPPLIES
+  PROFESSIONAL_SERVICES
+  CONSTRUCTION
+  HEALTHCARE
+  MANUFACTURING
+  LOGISTICS
+  MARKETING
+  UTILITIES
+  MAINTENANCE
+  TRAVEL
+  OTHER
+}
+
+model SpendRecord {
+  id                   String            @id @default(cuid())
+  vendorId             String?
+  vendorName           String
+  category             SpendCategory
+  subcategory          String?
+  amount               Float
+  currency             String            @default("USD")
+  transactionDate      DateTime
+  invoiceNumber        String?
+  poNumber             String?
+  department           String
+  costCenter           String?
+  project              String?
+  description          String?
+  paymentMethod        String?
+  aiCategoryPrediction String?
+  aiInsights           Json?
+  createdAt            DateTime          @default(now())
+
+  @@map("spend_records")
+}
+
+// Savings Opportunities for AI Savings Finder
+enum SavingsStatus {
+  IDENTIFIED
+  UNDER_REVIEW
+  APPROVED
+  IMPLEMENTING
+  REALIZED
+  REJECTED
+}
+
+enum SavingsType {
+  VOLUME_DISCOUNT
+  CONTRACT_CONSOLIDATION
+  SUPPLIER_SWITCHING
+  PROCESS_IMPROVEMENT
+  DEMAND_REDUCTION
+  PAYMENT_TERM_OPTIMIZATION
+  SPECIFICATION_CHANGE
+  RENEGOTIATION
+  COMPETITIVE_BIDDING
+  MAVERICK_SPEND_REDUCTION
+}
+
+// AI Results persistence — stores every AI call result for audit trail and analytics
+model AIResult {
+  id            String   @id @default(cuid())
+  analysisType  String   // e.g. 'vendor-scoring', 'bid-evaluation', 'compliance-check'
+  entityType    String?  // e.g. 'vendor', 'bid', 'contract'
+  entityId      String?  // ID of the entity analyzed
+  userId        String?  // User who triggered the analysis
+  inputData     Json     // Sanitized input sent to AI
+  result        Json     // Parsed AI result
+  model         String   // Model used
+  createdAt     DateTime @default(now())
+
+  @@map("ai_results")
+}
+
+model SavingsOpportunity {
+  id                   String            @id @default(cuid())
+  title                String
+  description          String
+  category             SpendCategory
+  savingsType          SavingsType
+  currentSpend         Float
+  projectedSavings     Float
+  savingsPercentage    Float
+  currency             String            @default("USD")
+  confidence           Float
+  implementationEffort String
+  timeToRealize        Int               // in days
+  riskLevel            RiskLevel         @default(MEDIUM)
+  status               SavingsStatus     @default(IDENTIFIED)
+  vendorId             String?
+  vendorName           String?
+  aiRecommendation     String
+  aiAnalysis           Json?
+  actionItems          String[]
+  realizedSavings      Float?
+  realizedAt           DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@map("savings_opportunities")
 }
 

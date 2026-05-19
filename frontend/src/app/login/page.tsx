@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_URL } from '@/lib/api';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -19,7 +20,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -116,7 +117,34 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <div className="text-center">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!formData.email) {
+                    setError('Please enter your email first');
+                    return;
+                  }
+                  try {
+                    const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: formData.email }),
+                    });
+                    if (res.ok) {
+                      setError('');
+                      alert('Password reset instructions sent to your email.');
+                    } else {
+                      setError('Could not send reset email. Please try again.');
+                    }
+                  } catch {
+                    setError('Network error. Please try again.');
+                  }
+                }}
+                className="text-sm text-indigo-600 hover:text-indigo-500"
+              >
+                Forgot Password?
+              </button>
               <Link href="/register" className="text-sm text-indigo-600 hover:text-indigo-500">
                 Don't have an account? Sign up
               </Link>
@@ -132,9 +160,14 @@ export default function LoginPage() {
                 <span className="px-2 bg-white text-gray-500">Demo credentials</span>
               </div>
             </div>
-            <div className="mt-3 text-center text-sm text-gray-600">
-              <p>Email: admin@procurement.com</p>
-              <p>Password: password</p>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setFormData({ email: 'admin@procurement.com', password: 'password' })}
+                className="w-full flex justify-center py-2 px-4 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Fill Demo Credentials
+              </button>
             </div>
           </div>
         </div>
