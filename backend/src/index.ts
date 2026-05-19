@@ -145,3 +145,8 @@ app.use('/api/gap-supplier-onboarding-checklist-automation', gapSupplierOnboardi
 app.use('/api/gap-catalog-enrichment-web-scraping-images', gapCatalogEnrichmentWebScrapingImagesRouter);
 app.use('/api/gap-outbound-webhook-delivery-notifications-are', gapOutboundWebhookDeliveryNotificationsAreRouter);
 app.use('/api/gap-e-signature-workflow-contracts', gapESignatureWorkflowContractsRouter);
+
+// Custom Views (Procurement Views) — 4 added features
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const customViewsRouter: any = require('./routes/customViews.js');
+app.use('/api/custom-views', customViewsRouter);

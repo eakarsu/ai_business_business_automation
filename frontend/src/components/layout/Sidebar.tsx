@@ -122,6 +122,20 @@ const navigation: NavGroup[] = [
     ],
   },
   {
+    title: 'Custom',
+    items: [
+      {
+        name: 'Procurement Views',
+        href: '/custom-views',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z" />
+          </svg>
+        ),
+      },
+    ],
+  },
+  {
     title: 'Account',
     items: [
       {
