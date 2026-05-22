@@ -18,7 +18,9 @@ const aiRateLimit = rateLimit({
   max: 20,
   keyGenerator: (req) => {
     const authReq = req as AuthRequest;
-    return authReq.user?.id || req.ip || 'anonymous';
+    const uid = authReq.user?.id;
+    if (uid !== undefined && uid !== null) return String(uid);
+    return req.ip || 'anonymous';
   },
   message: {
     success: false,

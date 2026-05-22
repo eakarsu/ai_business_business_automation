@@ -73,6 +73,16 @@ export default function Home() {
                 and comprehensive audit trails for regulatory requirements.
               </p>
             </div>
+
+            <Link href="/supplier-dependency-risk" className="bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
+                <span className="text-2xl text-red-600">!</span>
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Supplier Dependency Risk</h3>
+              <p className="text-gray-600">
+                Score concentrated spend, single-source exposure, delivery delays, and compliance findings.
+              </p>
+            </Link>
           </div>
         </div>
       </div>

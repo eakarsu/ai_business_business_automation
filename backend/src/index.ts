@@ -27,6 +27,7 @@ import savingsRoutes from './routes/savings';
 import counterOfferRoutes from './routes/counterOffers';
 import analyticsRoutes from './routes/analytics';
 import notificationsRoutes from './routes/notifications';
+import supplierDependencyRiskRoutes from './routes/supplierDependencyRisk';
 
 dotenv.config();
 
@@ -86,6 +87,7 @@ app.use('/api/savings', authenticateToken, savingsRoutes);
 app.use('/api/counter-offers', authenticateToken, counterOfferRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
 app.use('/api/notifications', authenticateToken, notificationsRoutes);
+app.use('/api/supplier-dependency-risk', authenticateToken, supplierDependencyRiskRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
