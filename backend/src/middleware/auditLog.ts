@@ -59,6 +59,7 @@ export function auditLogMiddleware(req: Request, res: Response, next: NextFuncti
       prisma.auditLog.create({
         data: {
           userId: authReq.user.id,
+          tenantId: authReq.user.tenantId,
           action,
           entityType,
           entityId: resolvedEntityId,

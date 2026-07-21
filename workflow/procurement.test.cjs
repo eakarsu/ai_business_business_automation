@@ -1,0 +1,4 @@
+const test=require('node:test');const assert=require('node:assert/strict');const w=require('./procurement.cjs');
+test('validates vendor input',()=>{assert.equal(w.validateVendor({name:'Acme',email:'ops@acme.test'}).name,'Acme');assert.throws(()=>w.validateVendor({name:'Acme',email:'bad'}),/invalid vendor/)});
+test('enforces roles and lifecycle',()=>{assert.equal(w.transitionBid('SUBMITTED','UNDER_EVALUATION',{id:'e1',role:'EVALUATOR'}).status,'UNDER_EVALUATION');assert.throws(()=>w.transitionBid('SUBMITTED','AWARDED',{id:'a',role:'ADMIN'}),/invalid transition/);assert.throws(()=>w.transitionBid('SUBMITTED','REJECTED',{id:'u',role:'USER'}),/forbidden/)});
+test('rejects unbounded AI output',()=>{assert.equal(w.validateAIResult({overallScore:80,recommendations:[]}).overallScore,80);assert.throws(()=>w.validateAIResult({overallScore:800,recommendations:[]}),/invalid AI result/)});

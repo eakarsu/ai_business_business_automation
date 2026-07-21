@@ -1,14 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { authenticateToken, AuthRequest, requireRole } from '../middleware/auth';
 import { sendCSV, sendPDFReport, paginationMeta } from '../lib/exportUtils';
 
 const router = Router();
 
 // Export CSV
-router.get('/export/csv', authenticateToken, async (req, res) => {
+router.get('/export/csv', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const vendors = await prisma.vendor.findMany({ orderBy: { createdAt: 'desc' } });
+    const vendors = await prisma.vendor.findMany({ where: { tenantId: req.user!.tenantId }, orderBy: { createdAt: 'desc' } });
     sendCSV(res, vendors, 'vendors.csv', [
       { key: 'name', label: 'Name' },
       { key: 'email', label: 'Email' },
@@ -26,9 +26,9 @@ router.get('/export/csv', authenticateToken, async (req, res) => {
 });
 
 // Export PDF
-router.get('/export/pdf', authenticateToken, async (req, res) => {
+router.get('/export/pdf', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const vendors = await prisma.vendor.findMany({ orderBy: { createdAt: 'desc' } });
+    const vendors = await prisma.vendor.findMany({ where: { tenantId: req.user!.tenantId }, orderBy: { createdAt: 'desc' } });
     sendPDFReport(res, 'Vendors Report', vendors, [
       { key: 'name', label: 'Name' },
       { key: 'email', label: 'Email' },
@@ -43,13 +43,13 @@ router.get('/export/pdf', authenticateToken, async (req, res) => {
 });
 
 // Bulk delete
-router.delete('/bulk', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.delete('/bulk', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'ids array is required' });
     }
-    const result = await prisma.vendor.deleteMany({ where: { id: { in: ids } } });
+    const result = await prisma.vendor.deleteMany({ where: { id: { in: ids }, tenantId: req.user!.tenantId } });
     return res.json({ message: `${result.count} vendors deleted`, count: result.count });
   } catch (error) {
     console.error('Bulk delete error:', error);
@@ -58,7 +58,7 @@ router.delete('/bulk', authenticateToken, async (req: AuthRequest, res: Response
 });
 
 // Bulk update
-router.put('/bulk', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.put('/bulk', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { ids, data } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0 || !data) {
@@ -69,7 +69,7 @@ router.put('/bulk', authenticateToken, async (req: AuthRequest, res: Response) =
     if (qualificationStatus !== undefined) updateData.qualificationStatus = qualificationStatus;
     if (isActive !== undefined) updateData.isActive = isActive;
 
-    const result = await prisma.vendor.updateMany({ where: { id: { in: ids } }, data: updateData });
+    const result = await prisma.vendor.updateMany({ where: { id: { in: ids }, tenantId: req.user!.tenantId }, data: updateData });
     return res.json({ message: `${result.count} vendors updated`, count: result.count });
   } catch (error) {
     console.error('Bulk update error:', error);
@@ -78,14 +78,14 @@ router.put('/bulk', authenticateToken, async (req: AuthRequest, res: Response) =
 });
 
 // Get all vendors (with pagination & search)
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const search = (req.query.search as string) || '';
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { tenantId: req.user!.tenantId };
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -123,7 +123,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   try {
     const { id } = req.params;
     const vendor = await prisma.vendor.findUnique({
-      where: { id },
+      where: { id_tenantId: { id, tenantId: req.user!.tenantId } },
       include: {
         products: {
           select: { id: true, name: true, category: true, unitPrice: true, currency: true, isActive: true, inStock: true }
@@ -139,14 +139,14 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 });
 
 // Create new vendor
-router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { name, email, phone, website, address, businessType, industryType } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
     if (!req.user?.id) return res.status(401).json({ error: 'User authentication required' });
 
     const vendor = await prisma.vendor.create({
-      data: { name, email, phone, website, address, businessType, industryType, createdById: req.user.id }
+      data: { name, email, phone, website, address, businessType, industryType, createdById: req.user.id, tenantId: req.user.tenantId }
     });
     return res.status(201).json({ vendor });
   } catch (error) {
@@ -156,16 +156,16 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 });
 
 // Update vendor
-router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { name, email, phone, website, address, businessType, industryType, qualificationStatus, isActive } = req.body;
 
-    const existingVendor = await prisma.vendor.findUnique({ where: { id } });
+    const existingVendor = await prisma.vendor.findUnique({ where: { id_tenantId: { id, tenantId: req.user!.tenantId } } });
     if (!existingVendor) return res.status(404).json({ error: 'Vendor not found' });
 
     const vendor = await prisma.vendor.update({
-      where: { id },
+      where: { id_tenantId: { id, tenantId: req.user!.tenantId } },
       data: { name, email, phone, website, address, businessType, industryType, qualificationStatus, isActive }
     });
     return res.json({ vendor });
@@ -176,13 +176,13 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 });
 
 // Delete vendor
-router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const existingVendor = await prisma.vendor.findUnique({ where: { id } });
+    const existingVendor = await prisma.vendor.findUnique({ where: { id_tenantId: { id, tenantId: req.user!.tenantId } } });
     if (!existingVendor) return res.status(404).json({ error: 'Vendor not found' });
 
-    await prisma.vendor.delete({ where: { id } });
+    await prisma.vendor.delete({ where: { id_tenantId: { id, tenantId: req.user!.tenantId } } });
     return res.json({ message: 'Vendor deleted successfully' });
   } catch (error) {
     console.error('Error deleting vendor:', error);

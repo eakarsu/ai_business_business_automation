@@ -1,14 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { authenticateToken, AuthRequest, requireRole } from '../middleware/auth';
 import { sendCSV, sendPDFReport, paginationMeta } from '../lib/exportUtils';
 
 const router = Router();
 
 // Export CSV
-router.get('/export/csv', authenticateToken, async (req, res) => {
+router.get('/export/csv', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const products = await prisma.product.findMany({ include: { vendor: { select: { name: true } } }, orderBy: { createdAt: 'desc' } });
+    const products = await prisma.product.findMany({ where: { tenantId: req.user!.tenantId }, include: { vendor: { select: { name: true } } }, orderBy: { createdAt: 'desc' } });
     const flat = products.map(p => ({ ...p, vendorName: p.vendor?.name }));
     sendCSV(res, flat, 'products.csv', [
       { key: 'name', label: 'Name' },
@@ -27,9 +27,9 @@ router.get('/export/csv', authenticateToken, async (req, res) => {
 });
 
 // Export PDF
-router.get('/export/pdf', authenticateToken, async (req, res) => {
+router.get('/export/pdf', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const products = await prisma.product.findMany({ include: { vendor: { select: { name: true } } }, orderBy: { createdAt: 'desc' } });
+    const products = await prisma.product.findMany({ where: { tenantId: req.user!.tenantId }, include: { vendor: { select: { name: true } } }, orderBy: { createdAt: 'desc' } });
     const flat = products.map(p => ({ ...p, vendorName: p.vendor?.name }));
     sendPDFReport(res, 'Products Report', flat, [
       { key: 'name', label: 'Name' },
@@ -45,13 +45,13 @@ router.get('/export/pdf', authenticateToken, async (req, res) => {
 });
 
 // Bulk delete
-router.delete('/bulk', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.delete('/bulk', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'ids array is required' });
     }
-    const result = await prisma.product.deleteMany({ where: { id: { in: ids } } });
+    const result = await prisma.product.deleteMany({ where: { id: { in: ids }, tenantId: req.user!.tenantId } });
     return res.json({ message: `${result.count} products deleted`, count: result.count });
   } catch (error) {
     console.error('Bulk delete error:', error);
@@ -60,7 +60,7 @@ router.delete('/bulk', authenticateToken, async (req: AuthRequest, res: Response
 });
 
 // Bulk update
-router.put('/bulk', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.put('/bulk', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { ids, data } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0 || !data) {
@@ -70,7 +70,7 @@ router.put('/bulk', authenticateToken, async (req: AuthRequest, res: Response) =
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.inStock !== undefined) updateData.inStock = data.inStock;
 
-    const result = await prisma.product.updateMany({ where: { id: { in: ids } }, data: updateData });
+    const result = await prisma.product.updateMany({ where: { id: { in: ids }, tenantId: req.user!.tenantId }, data: updateData });
     return res.json({ message: `${result.count} products updated`, count: result.count });
   } catch (error) {
     console.error('Bulk update error:', error);
@@ -79,7 +79,7 @@ router.put('/bulk', authenticateToken, async (req: AuthRequest, res: Response) =
 });
 
 // Get all products (with pagination & search)
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
@@ -87,7 +87,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const vendorId = req.query.vendorId as string;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { tenantId: req.user!.tenantId };
     if (vendorId) where.vendorId = vendorId;
     if (search) {
       where.OR = [
@@ -121,7 +121,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   try {
     const { id } = req.params;
     const product = await prisma.product.findUnique({
-      where: { id },
+      where: { id_tenantId: { id, tenantId: req.user!.tenantId } },
       include: { vendor: { select: { id: true, name: true, email: true, phone: true, website: true } } }
     });
     if (!product) return res.status(404).json({ error: 'Product not found' });
@@ -133,7 +133,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 });
 
 // Create a new product
-router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { vendorId, name, description, category, subcategory, sku, manufacturer, model, unitPrice, minOrderQty, maxOrderQty, currency, specifications, dimensions, weight, certifications, isActive, inStock, stockQuantity, leadTime, complianceStandards, qualityRatings } = req.body;
 
@@ -141,7 +141,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Vendor ID, name, and category are required' });
     }
 
-    const vendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
+    const vendor = await prisma.vendor.findUnique({ where: { id_tenantId: { id: vendorId, tenantId: req.user!.tenantId } } });
     if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
 
     const product = await prisma.product.create({
@@ -160,7 +160,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         stockQuantity: stockQuantity ? parseInt(stockQuantity) : null,
         leadTime: leadTime ? parseInt(leadTime) : null,
         complianceStandards: complianceStandards || [],
-        qualityRatings: qualityRatings || {}
+        qualityRatings: qualityRatings || {},
+        tenantId: req.user!.tenantId
       },
       include: { vendor: { select: { id: true, name: true, email: true } } }
     });
@@ -172,16 +173,16 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 });
 
 // Update a product
-router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { name, description, category, subcategory, sku, manufacturer, model, unitPrice, minOrderQty, maxOrderQty, currency, specifications, dimensions, weight, certifications, isActive, inStock, stockQuantity, leadTime, complianceStandards, qualityRatings } = req.body;
 
-    const existingProduct = await prisma.product.findUnique({ where: { id } });
+    const existingProduct = await prisma.product.findUnique({ where: { id_tenantId: { id, tenantId: req.user!.tenantId } } });
     if (!existingProduct) return res.status(404).json({ error: 'Product not found' });
 
     const product = await prisma.product.update({
-      where: { id },
+      where: { id_tenantId: { id, tenantId: req.user!.tenantId } },
       data: {
         name, description, category, subcategory, sku, manufacturer, model,
         unitPrice: unitPrice ? parseFloat(unitPrice) : null,
@@ -208,13 +209,13 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 });
 
 // Delete a product
-router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticateToken, requireRole('ADMIN', 'PROCUREMENT_MANAGER'), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const existingProduct = await prisma.product.findUnique({ where: { id } });
+    const existingProduct = await prisma.product.findUnique({ where: { id_tenantId: { id, tenantId: req.user!.tenantId } } });
     if (!existingProduct) return res.status(404).json({ error: 'Product not found' });
 
-    await prisma.product.delete({ where: { id } });
+    await prisma.product.delete({ where: { id_tenantId: { id, tenantId: req.user!.tenantId } } });
     return res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('Error deleting product:', error);

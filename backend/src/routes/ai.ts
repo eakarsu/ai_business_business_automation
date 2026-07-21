@@ -768,8 +768,9 @@ async function calculateBidAnalysisStats(): Promise<any> {
     const scoredBids = allBids.filter(b => b.overallScore !== null);
     const awardedBids = allBids.filter(b => b.status === 'AWARDED' && b.overallScore !== null);
 
-    const avg = (arr: (number | null)[], key: keyof typeof arr[0]) => {
-      const vals = arr.map((b: any) => b[key]).filter((v: any) => v !== null) as number[];
+    type ScoredBid = typeof allBids[number];
+    const avg = (arr: ScoredBid[], key: keyof Pick<ScoredBid, 'technicalScore' | 'costScore' | 'timelineScore' | 'riskScore' | 'overallScore'>) => {
+      const vals = arr.map(b => b[key]).filter((v): v is number => v !== null);
       return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     };
 

@@ -25,7 +25,7 @@ export default function ThreeWayInvoicePoReceiptPage() {
       }
   ];
 
-  const applySampleRequest = (value) => {
+  const applySampleRequest = (value: string) => {
     setInput(value);
     setError(null);
     setResult(null);

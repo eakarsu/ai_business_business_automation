@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
-import { authenticateToken, tokenBlacklist, AuthRequest } from '../middleware/auth';
+import { authenticateToken, tokenBlacklist, AuthRequest, requireRole } from '../middleware/auth';
 import { validatePasswordStrength } from '../middleware/validate';
 
 const router = express.Router();
@@ -11,6 +11,7 @@ const router = express.Router();
 // Login route
 router.post('/login', async (req, res) => {
   try {
+    if (process.env.AUTH_MODE === 'oidc' || process.env.NODE_ENV === 'production') return res.status(403).json({ success: false, message: 'Local login is disabled; use the configured identity provider' });
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -21,7 +22,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email: String(email).trim().toLowerCase() }
     });
     if (!user) {
       return res.status(401).json({
@@ -52,10 +53,14 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, message: 'Account is inactive' });
+    }
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId },
       jwtSecret,
-      { expiresIn: '24h' }
+      { expiresIn: '1h', issuer: 'ai-business-automation', audience: 'procurement-api' }
     );
 
     return res.json({
@@ -83,12 +88,13 @@ router.post('/login', async (req, res) => {
 // Register route
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, firstName, lastName, role = 'USER' } = req.body;
+    if (process.env.AUTH_MODE === 'oidc' || process.env.NODE_ENV === 'production') return res.status(403).json({ success: false, message: 'Local registration is disabled; use the configured identity provider' });
+    const { email, password, firstName, lastName, organization } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || typeof organization !== 'string' || organization.trim().length < 2) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: 'Email, password, and organization are required'
       });
     }
 
@@ -114,20 +120,24 @@ router.post('/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const validRoles = ['ADMIN', 'PROCUREMENT_MANAGER', 'EVALUATOR', 'COMPLIANCE_OFFICER', 'USER'];
-    const userRole = validRoles.includes(role.toUpperCase()) ? role.toUpperCase() : 'USER';
-
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    const newUser = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        role: userRole,
-        firstName: firstName || 'User',
-        lastName: lastName || 'User',
-        verificationToken
-      }
+    // Public registration provisions an isolated tenant and its owner. Joining an
+    // existing tenant is intentionally a separate administrator-controlled flow.
+    const newUser = await prisma.$transaction(async tx => {
+      const tenant = await tx.tenant.create({ data: { name: organization.trim() } });
+      return tx.user.create({
+        data: {
+          email: email.trim().toLowerCase(),
+          password: hashedPassword,
+          role: 'ADMIN',
+          firstName: firstName || 'User',
+          lastName: lastName || 'User',
+          organization: organization.trim(),
+          tenantId: tenant.id,
+          verificationToken
+        }
+      });
     });
 
     const jwtSecret = process.env.JWT_SECRET;
@@ -139,9 +149,9 @@ router.post('/register', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: newUser.id, email: newUser.email, role: newUser.role },
+      { id: newUser.id, email: newUser.email, role: newUser.role, tenantId: newUser.tenantId },
       jwtSecret,
-      { expiresIn: '24h' }
+      { expiresIn: '1h', issuer: 'ai-business-automation', audience: 'procurement-api' }
     );
 
     return res.status(201).json({
@@ -152,7 +162,9 @@ router.post('/register', async (req, res) => {
         email: newUser.email,
         firstName: newUser.firstName,
         lastName: newUser.lastName,
-        role: newUser.role
+        role: newUser.role,
+        tenantId: newUser.tenantId,
+        organization: newUser.organization
       }
     });
   } catch (error) {
@@ -208,15 +220,14 @@ router.get('/profile', authenticateToken, async (req: AuthRequest, res) => {
 // Update user profile
 router.put('/profile', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { firstName, lastName, department, organization } = req.body;
+    const { firstName, lastName, department } = req.body;
 
     const user = await prisma.user.update({
       where: { id: req.user!.id },
       data: {
         ...(firstName !== undefined && { firstName }),
         ...(lastName !== undefined && { lastName }),
-        ...(department !== undefined && { department }),
-        ...(organization !== undefined && { organization })
+        ...(department !== undefined && { department })
       },
       select: {
         id: true,
@@ -237,6 +248,33 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Update profile error:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/users', authenticateToken, requireRole('ADMIN'), async (req: AuthRequest, res) => {
+  try {
+    const { email, password, firstName, lastName, role = 'USER', oidcSubject } = req.body;
+    const allowedRoles = ['ADMIN', 'USER', 'PROCUREMENT_MANAGER', 'EVALUATOR', 'COMPLIANCE_OFFICER'];
+    const oidcMode = process.env.AUTH_MODE === 'oidc';
+    if (!email || (!oidcMode && !password) || !allowedRoles.includes(role)) {
+      return res.status(400).json({ success: false, message: 'Valid email, identity credential, and role are required' });
+    }
+    const generatedPassword = password || crypto.randomBytes(32).toString('hex');
+    const pwCheck = validatePasswordStrength(generatedPassword);
+    if (!pwCheck.valid) return res.status(400).json({ success: false, message: 'Password does not meet requirements', errors: pwCheck.errors });
+    const owner = await prisma.user.findUnique({ where: { id: req.user!.id }, include: { tenant: true } });
+    if (!owner || owner.tenantId !== req.user!.tenantId) return res.status(403).json({ success: false, message: 'Tenant identity mismatch' });
+    const user = await prisma.user.create({
+      data: {
+        email: String(email).trim().toLowerCase(), password: await bcrypt.hash(generatedPassword, 12),
+        firstName: firstName || 'User', lastName: lastName || 'User', role,
+        tenantId: owner.tenantId, organization: owner.tenant.name, oidcSubject: oidcSubject || null,
+      },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, tenantId: true },
+    });
+    return res.status(201).json({ success: true, user });
+  } catch (error) {
+    return res.status(409).json({ success: false, message: 'Unable to provision tenant user' });
   }
 });
 

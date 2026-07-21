@@ -4,6 +4,13 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.DESTRUCTIVE_DEMO_SEED_ACKNOWLEDGEMENT !== 'replace-all-data-with-demo-fixtures') {
+    throw new Error('Set DESTRUCTIVE_DEMO_SEED_ACKNOWLEDGEMENT=replace-all-data-with-demo-fixtures to run this destructive demo seed');
+  }
+  const demoPassword = process.env.DEMO_SEED_PASSWORD;
+  if (!demoPassword || demoPassword.length < 12) {
+    throw new Error('DEMO_SEED_PASSWORD of at least 12 characters is required');
+  }
   console.log('Starting database seed...');
 
   // Clean existing data
@@ -30,7 +37,7 @@ async function main() {
   const adminUser = await prisma.user.create({
     data: {
       email: 'admin@procurement.com',
-      password: await bcrypt.hash('password', 12),
+      password: await bcrypt.hash(demoPassword, 12),
       firstName: 'Admin',
       lastName: 'User',
       role: 'ADMIN',
@@ -43,7 +50,7 @@ async function main() {
   const procurementManager = await prisma.user.create({
     data: {
       email: 'manager@procurement.com',
-      password: await bcrypt.hash('password', 12),
+      password: await bcrypt.hash(demoPassword, 12),
       firstName: 'John',
       lastName: 'Manager',
       role: 'PROCUREMENT_MANAGER',
@@ -68,7 +75,7 @@ async function main() {
     { email: 'evaluator4@procurement.com', firstName: 'Maria', lastName: 'Garcia', role: 'EVALUATOR', department: 'Operations' },
   ];
 
-  const hashedPassword = await bcrypt.hash('password', 12);
+  const hashedPassword = await bcrypt.hash(demoPassword, 12);
   for (const u of additionalUsers) {
     await prisma.user.create({
       data: {

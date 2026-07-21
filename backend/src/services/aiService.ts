@@ -48,13 +48,9 @@ export class AIService {
 
   private static getOpenAIClient(): OpenAI {
     if (!this.openai) {
-      this.openai = process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'dummy-key' ? new OpenAI({
-        apiKey: process.env.OPENROUTER_API_KEY,
-        baseURL: 'https://openrouter.ai/api/v1',
-      }) : new OpenAI({
-        apiKey: 'sk-dummy-key-for-openrouter',
-        baseURL: 'https://openrouter.ai/api/v1',
-      });
+      const key = process.env.OPENROUTER_API_KEY;
+      if (!key || key === 'dummy-key' || key.startsWith('sk-dummy')) throw new Error('AI provider is not configured');
+      this.openai = new OpenAI({ apiKey: key, baseURL: 'https://openrouter.ai/api/v1', timeout: 30_000, maxRetries: 2 });
     }
     return this.openai;
   }

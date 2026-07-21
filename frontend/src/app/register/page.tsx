@@ -11,7 +11,7 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'USER'
+    organization: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,7 +37,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email: formData.email,
           password: formData.password,
-          role: formData.role
+          organization: formData.organization
         }),
       });
 
@@ -46,7 +46,7 @@ export default function RegisterPage() {
       if (data.success) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/dashboard');
+        router.push('/vendors');
       } else {
         setError(data.message || 'Registration failed');
       }
@@ -171,23 +171,20 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                Role
+              <label htmlFor="organization" className="block text-sm font-medium text-gray-700">
+                Organization
               </label>
               <div className="mt-1">
-                <select
-                  id="role"
-                  name="role"
-                  value={formData.role}
+                <input
+                  id="organization"
+                  name="organization"
+                  type="text"
+                  autoComplete="organization"
+                  required
+                  value={formData.organization}
                   onChange={handleChange}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="USER">User</option>
-                  <option value="ADMIN">Admin</option>
-                  <option value="PROCUREMENT_MANAGER">Procurement Manager</option>
-                  <option value="EVALUATOR">Evaluator</option>
-                  <option value="COMPLIANCE_OFFICER">Compliance Officer</option>
-                </select>
+                />
               </div>
             </div>
 
