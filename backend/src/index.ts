@@ -15,6 +15,7 @@ import authRoutes from './routes/auth';
 import vendorRoutes from './routes/vendors';
 import { bidRoutes } from './routes/bids';
 import productRoutes from './routes/products';
+import runtimeAiRoutes from './routes/runtimeAi';
 
 dotenv.config();
 
@@ -56,6 +57,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/vendors', authenticateToken, vendorRoutes);
 app.use('/api/products', authenticateToken, productRoutes);
 app.use('/api/bids', authenticateToken, bidRoutes);
+app.use('/api/runtime-ai', authenticateToken, runtimeAiRoutes);
 
 const experimentalEnabled = process.env.ENABLE_EXPERIMENTAL_ROUTES === 'true' && process.env.NODE_ENV !== 'production';
 if (experimentalEnabled) {
