@@ -32,6 +32,12 @@ async function main() {
   await prisma.vendor.deleteMany();
   await prisma.user.deleteMany();
 
+  const tenant = await prisma.tenant.upsert({
+    where: { id: 'demo-procurement-tenant' },
+    update: { name: 'Government Agency' },
+    create: { id: 'demo-procurement-tenant', name: 'Government Agency' },
+  });
+
   // Create admin user
   console.log('Creating users...');
   const adminUser = await prisma.user.create({
@@ -43,6 +49,7 @@ async function main() {
       role: 'ADMIN',
       department: 'Procurement',
       organization: 'Government Agency',
+      tenantId: tenant.id,
     },
   });
 
@@ -56,6 +63,7 @@ async function main() {
       role: 'PROCUREMENT_MANAGER',
       department: 'Procurement',
       organization: 'Government Agency',
+      tenantId: tenant.id,
     },
   });
 
@@ -86,6 +94,7 @@ async function main() {
         role: u.role,
         department: u.department,
         organization: 'Government Agency',
+        tenantId: tenant.id,
       },
     });
   }
@@ -132,6 +141,7 @@ async function main() {
         riskLevel: v.risk,
         qualificationStatus: 'QUALIFIED',
         createdById: adminUser.id,
+        tenantId: tenant.id,
       },
     });
     vendors.push(vendor);
@@ -175,6 +185,7 @@ async function main() {
         inStock: true,
         stockQuantity: Math.floor(10 + Math.random() * 90),
         leadTime: Math.floor(3 + Math.random() * 14),
+        tenantId: tenant.id,
       },
     });
     products.push(product);
@@ -203,6 +214,7 @@ async function main() {
         timelineScore: 70 + Math.random() * 25,
         riskScore: 70 + Math.random() * 25,
         overallScore: 70 + Math.random() * 25,
+        tenantId: tenant.id,
       },
     });
   }
